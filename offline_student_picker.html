@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>隨機點名系統</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', 'PingFang TC', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 4rem;
+            color: white;
+            text-align: center;
+            margin-bottom: 2rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 2rem;
+            padding: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .stat-label {
+            font-size: 2rem;
+            color: #666;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 5rem;
+            font-weight: bold;
+        }
+
+        .stat-value.called {
+            color: #10b981;
+        }
+
+        .stat-value.remaining {
+            color: #3b82f6;
+        }
+
+        .stat-icon {
+            font-size: 6rem;
+            opacity: 0.3;
+        }
+
+        .display-area {
+            background: white;
+            border-radius: 2rem;
+            padding: 3rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            margin-bottom: 2rem;
+            min-height: 400px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #ccc;
+        }
+
+        .empty-icon {
+            font-size: 8rem;
+            margin-bottom: 1rem;
+        }
+
+        .empty-text {
+            font-size: 3rem;
+        }
+
+        .result {
+            text-align: center;
+            width: 100%;
+        }
+
+        .result-label {
+            font-size: 3rem;
+            color: #666;
+            margin-bottom: 2rem;
+        }
+
+        .result-card {
+            background: linear-gradient(135deg, #fbbf24 0%, #f97316 100%);
+            border-radius: 2rem;
+            padding: 3rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .result-name {
+            font-size: 6rem;
+            font-weight: bold;
+            color: white;
+            margin-bottom: 1rem;
+        }
+
+        .result-id {
+            font-size: 3.5rem;
+            color: rgba(255,255,255,0.9);
+        }
+
+        .animating {
+            animation: pulse 0.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        button {
+            font-size: 3rem;
+            font-weight: bold;
+            color: white;
+            border: none;
+            border-radius: 2rem;
+            padding: 3rem 2rem;
+            cursor: pointer;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        button:hover:not(:disabled) {
+            transform: scale(1.05);
+        }
+
+        button:active:not(:disabled) {
+            transform: scale(0.95);
+        }
+
+        button:disabled {
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+
+        .btn-pick {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+
+        .btn-reset {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        }
+
+        .upload-area {
+            background: white;
+            border-radius: 2rem;
+            padding: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .upload-area h3 {
+            font-size: 2.5rem;
+            color: #333;
+            margin-bottom: 1.5rem;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 1rem;
+        }
+
+        .file-input-wrapper input[type="file"] {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        .file-input-label {
+            display: inline-block;
+            font-size: 2rem;
+            font-weight: bold;
+            color: white;
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            border-radius: 1.5rem;
+            padding: 1.5rem 3rem;
+            cursor: pointer;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            transition: all 0.3s;
+        }
+
+        .file-input-label:hover {
+            transform: scale(1.05);
+        }
+
+        .file-input-label:active {
+            transform: scale(0.95);
+        }
+
+        .file-name {
+            font-size: 1.5rem;
+            color: #666;
+            margin-top: 1rem;
+            min-height: 2rem;
+        }
+
+        .file-name.success {
+            color: #10b981;
+            font-weight: bold;
+        }
+
+        .file-name.error {
+            color: #ef4444;
+            font-weight: bold;
+        }
+
+        .called-list {
+            background: white;
+            border-radius: 2rem;
+            padding: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .all-list {
+            background: white;
+            border-radius: 2rem;
+            padding: 2rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            margin-top: 1.5rem;
+        }
+
+        .all-list h3 {
+            font-size: 2.5rem;
+            color: #333;
+            margin-bottom: 1.5rem;
+        }
+
+        .all-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+        }
+
+        .all-item {
+            background: #f9fafb;
+            border-radius: 1rem;
+            padding: 1rem;
+            text-align: center;
+            transition: transform 0.15s, background 0.15s;
+        }
+
+        .all-item.called {
+            background: #e6fffa;
+            opacity: 0.9;
+            box-shadow: inset 0 0 0 2px rgba(16,185,129,0.08);
+        }
+
+        .called-list h3 {
+            font-size: 2.5rem;
+            color: #333;
+            margin-bottom: 1.5rem;
+        }
+
+        .called-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+        }
+
+        .called-item {
+            background: #f3f4f6;
+            border-radius: 1rem;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .called-item-name {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+
+        .called-item-id {
+            font-size: 1.2rem;
+            color: #666;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>隨機點名系統</h1>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div>
+                    <div class="stat-label">已點名</div>
+                    <div class="stat-value called" id="calledCount">0</div>
+                </div>
+                <div class="stat-icon">👥</div>
+            </div>
+            <div class="stat-card">
+                <div>
+                    <div class="stat-label">未點名</div>
+                    <div class="stat-value remaining" id="remainingCount">0</div>
+                </div>
+                <div class="stat-icon">👥</div>
+            </div>
+        </div>
+
+        <div class="upload-area" id="uploadArea">
+            <h3>📁 上傳學生名單</h3>
+            <div class="file-input-wrapper">
+                <input type="file" id="fileInput" accept=".csv" />
+                <label for="fileInput" class="file-input-label">
+                    <span>📤</span>
+                    <span>選擇 CSV 檔案</span>
+                </label>
+            </div>
+            <div class="file-name" id="fileName">請選擇 CSV 檔案（格式：id,name）</div>
+        </div>
+
+        <div class="display-area" id="displayArea">
+            <div class="empty-state" id="emptyState">
+                <div class="empty-icon">📋</div>
+                <div class="empty-text">請先上傳學生名單 CSV 檔案</div>
+            </div>
+            <div class="result hidden" id="result">
+                <div class="result-label">點名結果</div>
+                <div class="result-card" id="resultCard">
+                    <div class="result-name" id="resultName"></div>
+                    <div class="result-id" id="resultId"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="buttons">
+            <button class="btn-pick" id="btnPick">
+                <span>🎲</span>
+                <span>隨機點名</span>
+            </button>
+            <button class="btn-reset" id="btnReset">
+                <span>🔄</span>
+                <span>重新開始</span>
+            </button>
+        </div>
+
+        <div class="called-list hidden" id="calledList">
+            <h3>已點名學生</h3>
+            <div class="called-grid" id="calledGrid"></div>
+        </div>
+        <div class="all-list" id="allList">
+            <h3>全班名單</h3>
+            <div class="all-grid" id="allGrid"></div>
+        </div>
+    </div>
+
+    <script>
+        const students = [];
+
+        // 從上傳的CSV檔案載入學生資料
+        // CSV format expected: id,name (header optional)
+        function loadStudentsFromFile(csvText, fileName) {
+            students.length = 0; // 清空現有學生列表
+            
+            try {
+                const lines = csvText.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+
+                if (lines.length === 0) throw new Error('CSV檔案為空');
+
+                // Detect header like: id,name
+                let start = 0;
+                const firstCols = lines[0].split(',');
+                if (firstCols.length >= 2 && /id/i.test(firstCols[0]) && /name/i.test(firstCols[1])) {
+                    start = 1;
+                }
+
+                for (let i = start; i < lines.length; i++) {
+                    const cols = lines[i].split(',');
+                    const id = cols[0].trim();
+                    const name = cols.slice(1).join(',').trim();
+                    if (id && name) students.push({ id, name });
+                }
+
+                // If parsing yields nothing, throw error
+                if (students.length === 0) throw new Error('無法解析學生資料，請確認CSV格式正確');
+
+                // 成功載入
+                fileNameEl.textContent = `✓ 已載入 ${students.length} 位學生：${fileName}`;
+                fileNameEl.className = 'file-name success';
+                
+                // 更新UI
+                updateStats();
+                updateCalledList();
+                
+                // 更新空狀態顯示
+                emptyState.innerHTML = `
+                    <div class="empty-icon">🎲</div>
+                    <div class="empty-text">點擊下方按鈕開始點名</div>
+                `;
+                
+                // 啟用按鈕
+                btnPick.disabled = false;
+                btnReset.disabled = false;
+                
+                // 重置點名狀態
+                calledStudents = [];
+                reset();
+                
+            } catch (err) {
+                console.error('Failed to parse CSV:', err);
+                fileNameEl.textContent = `✗ 錯誤：${err.message}`;
+                fileNameEl.className = 'file-name error';
+                students.length = 0;
+                btnPick.disabled = true;
+                btnReset.disabled = true;
+                updateStats();
+                updateCalledList();
+            }
+        }
+
+        let calledStudents = [];
+        let isAnimating = false;
+
+        const btnPick = document.getElementById('btnPick');
+        const btnReset = document.getElementById('btnReset');
+        const fileInput = document.getElementById('fileInput');
+        const fileNameEl = document.getElementById('fileName');
+        const calledCount = document.getElementById('calledCount');
+        const remainingCount = document.getElementById('remainingCount');
+        const emptyState = document.getElementById('emptyState');
+        const result = document.getElementById('result');
+        const resultCard = document.getElementById('resultCard');
+        const resultName = document.getElementById('resultName');
+        const resultId = document.getElementById('resultId');
+        const calledList = document.getElementById('calledList');
+        const calledGrid = document.getElementById('calledGrid');
+        const allList = document.getElementById('allList');
+        const allGrid = document.getElementById('allGrid');
+
+        // 音效功能
+        let audioContext;
+        
+        function initAudioContext() {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            } catch (e) {
+                console.warn('Web Audio API not supported');
+            }
+        }
+
+        // 播放滾動音效（快速、高頻）
+        function playRollingSound() {
+            if (!audioContext) return;
+            
+            try {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(800 + Math.random() * 200, audioContext.currentTime);
+                
+                gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.05);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.05);
+            } catch (e) {
+                console.warn('Failed to play rolling sound:', e);
+            }
+        }
+
+        // 播放選定音效（成功、確認音）
+        function playSelectionSound() {
+            if (!audioContext) return;
+            
+            try {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.type = 'sine';
+                // 播放一個上升的音調
+                oscillator.frequency.setValueAtTime(400, audioContext.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(800, audioContext.currentTime + 0.1);
+                oscillator.frequency.exponentialRampToValueAtTime(600, audioContext.currentTime + 0.2);
+                
+                gainNode.gain.setValueAtTime(0.15, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.3);
+            } catch (e) {
+                console.warn('Failed to play selection sound:', e);
+            }
+        }
+
+        // 播放重置音效
+        function playResetSound() {
+            if (!audioContext) return;
+            
+            try {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(300, audioContext.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(200, audioContext.currentTime + 0.15);
+                
+                gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.15);
+            } catch (e) {
+                console.warn('Failed to play reset sound:', e);
+            }
+        }
+
+        function updateStats() {
+            calledCount.textContent = calledStudents.length;
+            remainingCount.textContent = students.length - calledStudents.length;
+        }
+
+        function updateCalledList() {
+            if (calledStudents.length === 0) {
+                calledList.classList.add('hidden');
+                // still render all list when no one called
+                updateAllList();
+                return;
+            }
+
+            calledList.classList.remove('hidden');
+            calledGrid.innerHTML = '';
+
+            calledStudents.forEach(id => {
+                const student = students.find(s => s.id === id);
+                const item = document.createElement('div');
+                item.className = 'called-item';
+                item.innerHTML = `
+                    <div class="called-item-name">${student.name}</div>
+                    <div class="called-item-id">${student.id}</div>
+                `;
+                calledGrid.appendChild(item);
+            });
+
+            // update the all-list to reflect called state
+            updateAllList();
+        }
+
+        function updateAllList() {
+            if (!allGrid) return;
+            allGrid.innerHTML = '';
+            // if students not yet loaded, show placeholder
+            if (!students || students.length === 0) {
+                const p = document.createElement('div');
+                p.className = 'all-item';
+                p.textContent = '尚無學生資料';
+                allGrid.appendChild(p);
+                return;
+            }
+
+            students.forEach(s => {
+                const item = document.createElement('div');
+                item.className = 'all-item' + (calledStudents.includes(s.id) ? ' called' : '');
+                item.innerHTML = `
+                    <div class="called-item-name">${s.name}</div>
+                    <div class="called-item-id">${s.id}</div>
+                `;
+                allGrid.appendChild(item);
+            });
+        }
+
+        function pickRandomStudent() {
+            const remaining = students.filter(s => !calledStudents.includes(s.id));
+
+            if (remaining.length === 0) {
+                alert('所有學生都已被點名!');
+                return;
+            }
+
+            isAnimating = true;
+            btnPick.disabled = true;
+            btnReset.disabled = true;
+            resultCard.classList.add('animating');
+
+            emptyState.classList.add('hidden');
+            result.classList.remove('hidden');
+
+            let count = 0;
+            const interval = setInterval(() => {
+                const randomIndex = Math.floor(Math.random() * remaining.length);
+                const student = remaining[randomIndex];
+                resultName.textContent = student.name;
+                resultId.textContent = student.id;
+                count++;
+                
+                // 播放滾動音效
+                playRollingSound();
+
+                if (count > 15) {
+                    clearInterval(interval);
+                    const finalIndex = Math.floor(Math.random() * remaining.length);
+                    const selected = remaining[finalIndex];
+                    resultName.textContent = selected.name;
+                    resultId.textContent = selected.id;
+                    calledStudents.push(selected.id);
+                    
+                    // 播放選定音效
+                    playSelectionSound();
+                    
+                    isAnimating = false;
+                    btnPick.disabled = false;
+                    btnReset.disabled = false;
+                    resultCard.classList.remove('animating');
+                    
+                    updateStats();
+                    updateCalledList();
+                }
+            }, 100);
+        }
+
+        function reset() {
+            calledStudents = [];
+            isAnimating = false;
+            
+            // 播放重置音效
+            playResetSound();
+            
+            emptyState.classList.remove('hidden');
+            result.classList.add('hidden');
+            
+            // 根據是否有學生顯示不同的提示
+            if (students.length > 0) {
+                emptyState.innerHTML = `
+                    <div class="empty-icon">🎲</div>
+                    <div class="empty-text">點擊下方按鈕開始點名</div>
+                `;
+            } else {
+                emptyState.innerHTML = `
+                    <div class="empty-icon">📋</div>
+                    <div class="empty-text">請先上傳學生名單 CSV 檔案</div>
+                `;
+            }
+            
+            updateStats();
+            updateCalledList();
+        }
+
+        btnPick.addEventListener('click', pickRandomStudent);
+        btnReset.addEventListener('click', reset);
+
+        // 文件上傳處理
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // 檢查檔案類型
+            if (!file.name.toLowerCase().endsWith('.csv')) {
+                fileNameEl.textContent = '✗ 錯誤：請選擇 CSV 檔案';
+                fileNameEl.className = 'file-name error';
+                return;
+            }
+
+            fileNameEl.textContent = `載入中：${file.name}...`;
+            fileNameEl.className = 'file-name';
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const csvText = event.target.result;
+                loadStudentsFromFile(csvText, file.name);
+            };
+            reader.onerror = function() {
+                fileNameEl.textContent = '✗ 錯誤：無法讀取檔案';
+                fileNameEl.className = 'file-name error';
+            };
+            reader.readAsText(file, 'UTF-8');
+        });
+
+        // 初始化
+        // disable buttons until students loaded
+        btnPick.disabled = true;
+        btnReset.disabled = true;
+        
+        // 初始化音效系統（某些瀏覽器需要用戶交互後才能使用）
+        // 在用戶第一次點擊時初始化音效
+        function initAudioOnUserInteraction() {
+            if (!audioContext) {
+                initAudioContext();
+            } else if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+        }
+        
+        // 監聽用戶交互以啟用音效
+        document.addEventListener('click', initAudioOnUserInteraction, { once: true });
+        document.addEventListener('touchstart', initAudioOnUserInteraction, { once: true });
+    </script>
+</body>
+</html>
