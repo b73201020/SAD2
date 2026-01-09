@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>命運轉盤 - Wheel of Names</title>
+    <!-- 引入 Tailwind CSS 進行快速排版 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 引入 Google Fonts Noto Sans TC */
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
+        
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: #f0f2f5;
+            overflow-x: hidden; /* 防止旋轉時可能的捲軸跳動 */
+        }
+
+        /* 轉盤容器樣式 */
+        .canvas-container {
+            position: relative;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            border-radius: 50%;
+            border: 8px solid white;
+            transition: transform 0.1s;
+        }
+
+        /* 指針樣式 (紅色三角形) */
+        .pointer {
+            position: absolute;
+            top: 50%;
+            right: -25px; /* 放置在轉盤右側 */
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-top: 25px solid transparent;
+            border-bottom: 25px solid transparent;
+            border-right: 40px solid #ef4444; /* 紅色 */
+            filter: drop-shadow(-2px 2px 2px rgba(0,0,0,0.3));
+            z-index: 10;
+        }
+        
+        /* 手機版指針調整 */
+        @media (max-width: 768px) {
+            .pointer {
+                right: -15px;
+                border-top: 15px solid transparent;
+                border-bottom: 15px solid transparent;
+                border-right: 25px solid #ef4444;
+            }
+        }
+
+        .modal {
+            background-color: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+        }
+
+        /* 自訂捲軸樣式 */
+        textarea::-webkit-scrollbar {
+            width: 8px;
+        }
+        textarea::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        textarea::-webkit-scrollbar-thumb {
+            background: #888; 
+            border-radius: 4px;
+        }
+        textarea::-webkit-scrollbar-thumb:hover {
+            background: #555; 
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col md:flex-row text-gray-800">
+
+    <!-- 左側：轉盤區域 -->
+    <div class="w-full md:w-7/12 lg:w-3/4 flex flex-col items-center justify-center p-4 bg-slate-100 relative overflow-hidden">
+        
+        <!-- 手機版標題 -->
+        <h1 class="md:hidden text-2xl font-bold mb-4 text-slate-700">命運轉盤</h1>
+
+        <div class="relative canvas-container" id="wheelContainer">
+            <canvas id="wheelCanvas" width="600" height="600" class="w-full h-full max-w-[500px] max-h-[500px]"></canvas>
+            <div class="pointer"></div>
+            <!-- 中央按鈕 -->
+            <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-white rounded-full p-2 shadow-lg z-20 cursor-pointer hover:scale-105 transition-transform" onclick="spin()">
+                <div class="bg-gradient-to-r from-blue-500 to-indigo-600 text-white w-16 h-16 rounded-full flex items-center justify-center font-bold shadow-inner border-4 border-white">
+                    SPIN
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-8 text-center text-gray-500 text-sm">
+            點擊中央按鈕或按下 <kbd class="px-2 py-1 bg-white border rounded">Ctrl</kbd> + <kbd class="px-2 py-1 bg-white border rounded">Enter</kbd> 開始旋轉
+        </div>
+    </div>
+
+    <!-- 右側：控制面板與輸入框 -->
+    <div class="w-full md:w-5/12 lg:w-1/4 bg-white shadow-xl flex flex-col h-full border-l border-gray-200">
+        <div class="p-6 bg-gradient-to-r from-slate-800 to-slate-900 text-white shadow-md z-10">
+            <h1 class="text-2xl font-bold hidden md:block">命運轉盤設定</h1>
+            <div class="flex gap-2 mt-4">
+                <button onclick="shuffleNames()" class="flex-1 bg-slate-700 hover:bg-slate-600 py-2 rounded text-sm transition flex items-center justify-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    打亂順序
+                </button>
+                <button onclick="sortNames()" class="flex-1 bg-slate-700 hover:bg-slate-600 py-2 rounded text-sm transition flex items-center justify-center gap-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" /></svg>
+                    排序
+                </button>
+            </div>
+        </div>
+
+        <div class="flex-1 p-4 flex flex-col overflow-hidden">
+            <label class="font-bold text-gray-600 mb-2 flex justify-between">
+                <span>選項列表</span>
+                <span class="text-xs font-normal text-gray-400 bg-gray-100 px-2 py-1 rounded-full" id="countDisplay">0 個選項</span>
+            </label>
+            <textarea id="namesInput" class="flex-1 w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none text-base leading-relaxed bg-gray-50" placeholder="請輸入選項，每一行代表一個選項...">
+漢堡
+披薩
+壽司
+義大利麵
+牛排
+火鍋
+滷肉飯
+咖哩飯
+沙拉
+拉麵
+</textarea>
+            
+            <div class="mt-4 space-y-4">
+                <!-- 音效開關 -->
+                <div class="flex items-center gap-2 text-sm text-gray-600">
+                    <input type="checkbox" id="soundToggle" checked class="w-4 h-4 text-blue-600 rounded focus:ring-blue-500">
+                    <label for="soundToggle" class="cursor-pointer select-none font-medium">啟用音效</label>
+                </div>
+
+                <!-- 音樂選擇 -->
+                <div>
+                    <label for="musicSelect" class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1 block">旋轉過程音樂風格</label>
+                    <div class="relative">
+                        <select id="musicSelect" class="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md bg-gray-50 border">
+                            <option value="mechanical">⚙️ 機械齒輪 (經典變速)</option>
+                            <option value="circus">🎪 歡樂馬戲團 (活潑)</option>
+                            <option value="tense">😨 緊張時刻 (低頻)</option>
+                            <option value="game">👾 8-bit 電玩 (快節奏)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="p-4 border-t bg-gray-50">
+            <button onclick="spin()" id="spinBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow-lg transform transition active:scale-95 flex items-center justify-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                開始旋轉!
+            </button>
+        </div>
+    </div>
+
+    <!-- 中獎彈窗 (Modal) -->
+    <div id="winnerModal" class="modal fixed inset-0 hidden items-center justify-center z-50 p-4 opacity-0 transition-opacity duration-300">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full transform scale-90 transition-transform duration-300" id="modalContent">
+            <div class="p-6 text-center">
+                <div class="text-6xl mb-4 animate-bounce">🎉</div>
+                <h2 class="text-2xl font-bold text-gray-800 mb-1">恭喜抽中!</h2>
+                <div id="winnerName" class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 py-4 break-words">
+                    Winner Name
+                </div>
+            </div>
+            <div class="bg-gray-50 px-6 py-4 rounded-b-2xl flex flex-col gap-2">
+                <button onclick="closeModal()" class="w-full bg-white border border-gray-300 hover:bg-gray-100 text-gray-700 font-bold py-2 px-4 rounded transition">
+                    保留並關閉
+                </button>
+                <div class="flex gap-2">
+                    <button onclick="removeWinner(false)" class="flex-1 bg-red-100 hover:bg-red-200 text-red-700 font-bold py-2 px-4 rounded transition text-sm">
+                        移除這一個
+                    </button>
+                    <button onclick="removeWinner(true)" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition text-sm">
+                        移除所有同名
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 彩帶特效 Canvas -->
+    <canvas id="confetti" class="fixed inset-0 pointer-events-none z-40 hidden"></canvas>
+
+    <script>
+        // --- 變數與設定 ---
+        const canvas = document.getElementById('wheelCanvas');
+        const ctx = canvas.getContext('2d');
+        const textarea = document.getElementById('namesInput');
+        const modal = document.getElementById('winnerModal');
+        const modalContent = document.getElementById('modalContent');
+        const countDisplay = document.getElementById('countDisplay');
+        const musicSelect = document.getElementById('musicSelect');
+        
+        let names = [];
+        let startAngle = 0;
+        let arc = 0;
+        let spinTimeout = null;
+        let spinAngleStart = 0;
+        let spinTime = 0;
+        let spinTimeTotal = 0;
+        let isSpinning = false;
+        let currentWinnerIndex = -1;
+
+        // 音效相關變數 (Web Audio API)
+        let audioCtx;
+        let activeOscillators = []; // 儲存進行中的音頻節點，方便停止
+        let musicInterval = null;   // 儲存音樂循環的計時器
+
+        // --- 配色盤 (現代風格色彩) ---
+        const palette = [
+            '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', 
+            '#F7DC6F', '#BB8FCE', '#F1948A', '#82E0AA', '#85C1E9',
+            '#F5B041', '#5D6D7E', '#D7BDE2', '#A3E4D7', '#F0B27A'
+        ];
+
+        // --- 初始化 ---
+        function init() {
+            textarea.addEventListener('input', updateWheel);
+            document.addEventListener('keydown', (e) => {
+                if (e.ctrlKey && e.key === 'Enter') spin();
+            });
+            updateWheel();
+        }
+
+        function getNames() {
+            // 過濾空行
+            return textarea.value.split('\n').filter(name => name.trim() !== '');
+        }
+
+        function updateWheel() {
+            names = getNames();
+            countDisplay.innerText = `${names.length} 個選項`;
+            
+            // 計算每個扇形的角度
+            if (names.length > 0) {
+                arc = 2 * Math.PI / names.length;
+            } else {
+                arc = 0;
+            }
+            drawWheel();
+        }
+
+        function shuffleNames() {
+            const currentNames = getNames();
+            for (let i = currentNames.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [currentNames[i], currentNames[j]] = [currentNames[j], currentNames[i]];
+            }
+            textarea.value = currentNames.join('\n');
+            updateWheel();
+        }
+
+        function sortNames() {
+            const currentNames = getNames();
+            // 支援中文排序
+            currentNames.sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+            textarea.value = currentNames.join('\n');
+            updateWheel();
+        }
+
+        // --- 繪製轉盤 ---
+        function drawWheel() {
+            if (canvas.getContext) {
+                const outsideRadius = 250;
+                const textRadius = 190; // 文字距離中心的半徑
+                const insideRadius = 0; // 實心中心
+                const centerX = canvas.width / 2;
+                const centerY = canvas.height / 2;
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                ctx.strokeStyle = "white";
+                ctx.lineWidth = 2;
+
+                // 繪製每一個扇形
+                for (let i = 0; i < names.length; i++) {
+                    const angle = startAngle + i * arc;
+                    ctx.fillStyle = palette[i % palette.length];
+
+                    ctx.beginPath();
+                    ctx.arc(centerX, centerY, outsideRadius, angle, angle + arc, false);
+                    ctx.arc(centerX, centerY, insideRadius, angle + arc, angle, true);
+                    ctx.stroke();
+                    ctx.fill();
+
+                    // 繪製文字
+                    ctx.save();
+                    ctx.fillStyle = "white"; 
+                    
+                    // 將座標移到扇形中心並旋轉
+                    ctx.translate(centerX + Math.cos(angle + arc / 2) * textRadius, 
+                                  centerY + Math.sin(angle + arc / 2) * textRadius);
+                    ctx.rotate(angle + arc / 2 + Math.PI); // 文字向內旋轉
+                    
+                    const text = names[i];
+                    // 自動調整字體大小
+                    let fontSize = 24;
+                    if (names.length > 12) fontSize = 18;
+                    if (names.length > 20) fontSize = 14;
+                    if (text.length > 10) fontSize = fontSize * 0.8;
+
+                    ctx.font = `bold ${fontSize}px 'Noto Sans TC', sans-serif`;
+                    ctx.shadowColor = "rgba(0,0,0,0.5)";
+                    ctx.shadowBlur = 4;
+                    // 文字置中
+                    ctx.fillText(text, -ctx.measureText(text).width / 2, 0);
+                    ctx.restore();
+                }
+
+                // 繪製中心裝飾圓
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, 30, 0, 2 * Math.PI);
+                ctx.fillStyle = "white";
+                ctx.fill();
+                ctx.lineWidth = 5;
+                ctx.strokeStyle = "#e2e8f0";
+                ctx.stroke();
+
+                // 繪製外框圓
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, outsideRadius, 0, 2 * Math.PI);
+                ctx.lineWidth = 10;
+                ctx.strokeStyle = "#ffffff";
+                ctx.stroke();
+                
+                // 陰影效果
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, outsideRadius, 0, 2 * Math.PI);
+                ctx.lineWidth = 1;
+                ctx.strokeStyle = "rgba(0,0,0,0.1)";
+                ctx.stroke();
+            }
+        }
+
+        // --- 旋轉邏輯 ---
+        function spin() {
+            if (isSpinning) return;
+            if (names.length < 1) {
+                alert('請先輸入至少一個選項！');
+                return;
+            }
+
+            isSpinning = true;
+            document.getElementById('spinBtn').disabled = true;
+            document.getElementById('spinBtn').classList.add('opacity-50', 'cursor-not-allowed');
+            
+            // 隨機旋轉參數
+            spinAngleStart = Math.random() * 10 + 10; // 初始速度
+            spinTime = 0;
+            spinTimeTotal = Math.random() * 3000 + 4000; // 旋轉時間 4-7 秒
+
+            if (document.getElementById('soundToggle').checked) {
+                playSpinSound();
+            }
+
+            rotateWheel();
+        }
+
+        function rotateWheel() {
+            spinTime += 30;
+            if (spinTime >= spinTimeTotal) {
+                stopRotateWheel();
+                return;
+            }
+            
+            // 減速函數 (Ease Out)
+            const spinAngle = spinAngleStart - easeOut(spinTime, 0, spinAngleStart, spinTimeTotal);
+            startAngle += (spinAngle * Math.PI / 180);
+            drawWheel();
+            
+            // 處理【機械齒輪】音效的頻率變化 (其他音樂模式不需要變速)
+            if (document.getElementById('soundToggle').checked && musicSelect.value === 'mechanical') {
+                updateMechanicalSound(spinTime, spinTimeTotal);
+            }
+
+            spinTimeout = requestAnimationFrame(rotateWheel);
+        }
+
+        function stopRotateWheel() {
+            cancelAnimationFrame(spinTimeout);
+            isSpinning = false;
+            document.getElementById('spinBtn').disabled = false;
+            document.getElementById('spinBtn').classList.remove('opacity-50', 'cursor-not-allowed');
+
+            stopSpinSound();
+            if (document.getElementById('soundToggle').checked) {
+                playWinSound();
+            }
+
+            // 計算中獎者
+            let currentAngle = startAngle % (2 * Math.PI);
+            if (currentAngle < 0) currentAngle += 2 * Math.PI;
+            
+            const winningIndex = Math.floor((2 * Math.PI - currentAngle) / arc) % names.length;
+            
+            showWinner(names[winningIndex], winningIndex);
+        }
+
+        function easeOut(t, b, c, d) {
+            const ts = (t /= d) * t;
+            const tc = ts * t;
+            return b + c * (tc + -3 * ts + 3 * t);
+        }
+
+        // --- 進階音效系統 (Music System) ---
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            // Resume context if suspended (browser policy)
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        // 播放單個音符的輔助函式
+        function playNote(frequency, type = 'sine', duration = 0.1, volume = 0.1) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            osc.type = type;
+            osc.frequency.value = frequency;
+            
+            gain.gain.setValueAtTime(volume, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+            
+            // 存入陣列以便管理（雖然這種短音符通常會自動結束，但在連續播放時需要管理長音）
+            activeOscillators.push(osc); 
+        }
+
+        // 啟動旋轉音效/音樂
+        function playSpinSound() {
+            initAudio();
+            stopSpinSound(); // 先清除舊的
+
+            const style = musicSelect.value;
+
+            if (style === 'mechanical') {
+                // --- 1. 機械齒輪 (模擬連續鋸齒波) ---
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.value = 100; // 初始頻率
+                gain.gain.value = 0.05;
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                
+                activeOscillators.push(osc); // 記錄下來以便更新頻率
+                activeOscillators.push(gain); // 記錄 gain 以便淡出
+
+            } else if (style === 'circus') {
+                // --- 2. 歡樂馬戲團 (C大調琶音循環) ---
+                // Notes: C4, E4, G4, C5, G4, E4
+                const notes = [261.63, 329.63, 392.00, 523.25, 392.00, 329.63];
+                let noteIndex = 0;
+                
+                // 立即播放第一個音
+                playNote(notes[0], 'triangle', 0.2, 0.1);
+
+                // 設定循環播放
+                musicInterval = setInterval(() => {
+                    noteIndex = (noteIndex + 1) % notes.length;
+                    // 使用 Triangle 波形模擬管風琴/汽笛感
+                    playNote(notes[noteIndex], 'triangle', 0.2, 0.1); 
+                }, 150); // 每 150ms 一個音
+
+            } else if (style === 'tense') {
+                // --- 3. 緊張時刻 (低頻 Drone + 脈衝) ---
+                
+                // 建立一個持續的低頻底噪
+                const droneOsc = audioCtx.createOscillator();
+                const droneGain = audioCtx.createGain();
+                droneOsc.type = 'sawtooth';
+                droneOsc.frequency.value = 50; // 超低頻
+                droneGain.gain.value = 0.08;
+                droneOsc.connect(droneGain);
+                droneGain.connect(audioCtx.destination);
+                droneOsc.start();
+                activeOscillators.push(droneOsc);
+                activeOscillators.push(droneGain);
+
+                // 加上心跳般的脈衝
+                musicInterval = setInterval(() => {
+                    playNote(60, 'square', 0.1, 0.05); // 像心跳的低頻
+                }, 500);
+
+            } else if (style === 'game') {
+                // --- 4. 8-bit 電玩 (快速隨機琶音) ---
+                musicInterval = setInterval(() => {
+                    // 隨機產生 C 大調五聲音階的高音: C5, D5, E5, G5, A5
+                    const pentatonic = [523.25, 587.33, 659.25, 783.99, 880.00, 1046.50];
+                    const randomNote = pentatonic[Math.floor(Math.random() * pentatonic.length)];
+                    playNote(randomNote, 'square', 0.1, 0.05);
+                }, 80); // 非常快
+            }
+        }
+
+        // 更新機械音效的頻率 (使其隨速度變慢而變低)
+        function updateMechanicalSound(current, total) {
+            // activeOscillators[0] 是 osc, activeOscillators[1] 是 gain
+            if (activeOscillators.length > 0 && activeOscillators[0] instanceof OscillatorNode) {
+                const progress = current / total;
+                const osc = activeOscillators[0];
+                // 頻率從 400Hz 降到 50Hz
+                try {
+                    osc.frequency.value = Math.max(50, 400 * (1 - progress));
+                } catch(e) {}
+            }
+        }
+
+        function stopSpinSound() {
+            // 停止計時器 (音樂循環)
+            if (musicInterval) {
+                clearInterval(musicInterval);
+                musicInterval = null;
+            }
+
+            // 停止所有持續發聲的振盪器 (Oscillators)
+            activeOscillators.forEach(node => {
+                try {
+                    if (node instanceof OscillatorNode) {
+                        node.stop();
+                    } else if (node instanceof GainNode) {
+                        // 稍微淡出避免爆音
+                        node.gain.setTargetAtTime(0, audioCtx.currentTime, 0.01);
+                    }
+                } catch (e) {
+                    // 忽略錯誤 (例如已經停止的節點)
+                }
+            });
+            activeOscillators = [];
+        }
+
+        function playWinSound() {
+            initAudio();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            osc.type = 'sine'; // 正弦波，聲音圓潤
+            // 簡單的 "登登登登" 爬音
+            osc.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+            osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.1); // E5
+            osc.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.2); // G5
+            osc.frequency.setValueAtTime(1046.50, audioCtx.currentTime + 0.3); // C6
+
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.8);
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.8);
+        }
+
+        // --- 彈窗與移除邏輯 ---
+        function showWinner(name, index) {
+            currentWinnerIndex = index;
+            document.getElementById('winnerName').innerText = name;
+            
+            modal.classList.remove('hidden');
+            // 觸發重繪以執行 CSS transition
+            void modal.offsetWidth;
+            modal.classList.remove('opacity-0');
+            modalContent.classList.remove('scale-90');
+            modalContent.classList.add('scale-100');
+
+            startConfetti();
+        }
+
+        function closeModal() {
+            modal.classList.add('opacity-0');
+            modalContent.classList.add('scale-90');
+            modalContent.classList.remove('scale-100');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                stopConfetti();
+            }, 300);
+        }
+
+        function removeWinner(removeAll) {
+            const winnerName = document.getElementById('winnerName').innerText;
+            let currentNames = getNames();
+
+            if (removeAll) {
+                currentNames = currentNames.filter(n => n !== winnerName);
+            } else {
+                // 移除一個: 找到第一個符合的並刪除
+                const idx = currentNames.indexOf(winnerName);
+                if (idx > -1) {
+                    currentNames.splice(idx, 1);
+                }
+            }
+
+            textarea.value = currentNames.join('\n');
+            updateWheel();
+            closeModal();
+        }
+
+        // --- 簡單彩帶特效 (Confetti) ---
+        let confettiInterval;
+        function startConfetti() {
+            const c = document.getElementById('confetti');
+            c.classList.remove('hidden');
+            c.width = window.innerWidth;
+            c.height = window.innerHeight;
+            const ctxC = c.getContext('2d');
+            
+            const particles = [];
+            for(let i=0; i<100; i++) {
+                particles.push({
+                    x: Math.random() * c.width,
+                    y: Math.random() * c.height - c.height,
+                    vx: Math.random() * 4 - 2,
+                    vy: Math.random() * 5 + 2,
+                    color: `hsl(${Math.random()*360}, 100%, 50%)`
+                });
+            }
+
+            function drawConfetti() {
+                ctxC.clearRect(0, 0, c.width, c.height);
+                particles.forEach(p => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    if (p.y > c.height) p.y = -10;
+                    ctxC.fillStyle = p.color;
+                    ctxC.fillRect(p.x, p.y, 6, 6);
+                });
+            }
+            confettiInterval = setInterval(drawConfetti, 20);
+        }
+
+        function stopConfetti() {
+            clearInterval(confettiInterval);
+            document.getElementById('confetti').classList.add('hidden');
+        }
+
+        // 視窗縮放時重繪
+        window.addEventListener('resize', () => {
+            drawWheel();
+        });
+
+        // 啟動
+        init();
+
+    </script>
+</body>
+</html>
