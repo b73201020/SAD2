@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>麻將聽牌計算機 (Mahjong Wait Calculator)</title>
+    
+    <!-- 載入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 載入 React 與 ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    
+    <!-- 載入 Babel 以支援 JSX 語法 -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body {
+            background-color: #064e3b; /* Emerald 900 fallback */
+            overscroll-behavior: none; /* Prevent pull-to-refresh on mobile */
+        }
+        /* 隱藏尚未編譯完成的內容 */
+        #root:empty {
+            display: none;
+        }
+        /* 自定義捲軸樣式 */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // --- 圖示組件 ---
+        const Trash2 = ({ size = 20, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+        );
+
+        const ArrowDownUp = ({ size = 20, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="m21 8-4-4-4 4"/><path d="M17 4v16"/></svg>
+        );
+
+        const Info = ({ size = 20, className = "" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+        );
+
+        // --- 核心資料 ---
+        const TILES = [
+            // Man (萬)
+            { id: 'm1', type: 'man', val: 1, label: '一' }, { id: 'm2', type: 'man', val: 2, label: '二' }, { id: 'm3', type: 'man', val: 3, label: '三' },
+            { id: 'm4', type: 'man', val: 4, label: '四' }, { id: 'm5', type: 'man', val: 5, label: '五' }, { id: 'm6', type: 'man', val: 6, label: '六' },
+            { id: 'm7', type: 'man', val: 7, label: '七' }, { id: 'm8', type: 'man', val: 8, label: '八' }, { id: 'm9', type: 'man', val: 9, label: '九' },
+            // Pin (筒)
+            { id: 'p1', type: 'pin', val: 1, label: '①' }, { id: 'p2', type: 'pin', val: 2, label: '②' }, { id: 'p3', type: 'pin', val: 3, label: '③' },
+            { id: 'p4', type: 'pin', val: 4, label: '④' }, { id: 'p5', type: 'pin', val: 5, label: '⑤' }, { id: 'p6', type: 'pin', val: 6, label: '⑥' },
+            { id: 'p7', type: 'pin', val: 7, label: '⑦' }, { id: 'p8', type: 'pin', val: 8, label: '⑧' }, { id: 'p9', type: 'pin', val: 9, label: '⑨' },
+            // Sou (索)
+            { id: 's1', type: 'sou', val: 1, label: '🐦' }, { id: 's2', type: 'sou', val: 2, label: '2' }, { id: 's3', type: 'sou', val: 3, label: '3' },
+            { id: 's4', type: 'sou', val: 4, label: '4' }, { id: 's5', type: 'sou', val: 5, label: '5' }, { id: 's6', type: 'sou', val: 6, label: '6' },
+            { id: 's7', type: 'sou', val: 7, label: '7' }, { id: 's8', type: 'sou', val: 8, label: '8' }, { id: 's9', type: 'sou', val: 9, label: '9' },
+            // Zi (字)
+            { id: 'z1', type: 'zi', val: 1, label: '東' }, { id: 'z2', type: 'zi', val: 2, label: '南' }, { id: 'z3', type: 'zi', val: 3, label: '西' }, { id: 'z4', type: 'zi', val: 4, label: '北' },
+            { id: 'z5', type: 'zi', val: 5, label: '中' }, { id: 'z6', type: 'zi', val: 6, label: '發' }, { id: 'z7', type: 'zi', val: 7, label: '白' }, 
+        ];
+
+        const SORT_ORDER = TILES.reduce((acc, t, i) => { acc[t.id] = i; return acc; }, {});
+
+        // 更新：圖檔路徑使用 images/ 開頭 (相對路徑)
+        const getTileImageSrc = (tile, preferLocal = true) => {
+            const remoteBaseUrl = 'https://raw.githubusercontent.com/FluffyStuff/riichi-mahjong-tiles/master/Regular';
+            if (preferLocal) {
+                const localPrefix = 'images/'; // 改為相對路徑
+                if (tile.type === 'man') return `${localPrefix}Man${tile.val}.png`;
+                if (tile.type === 'pin') return `${localPrefix}Pin${tile.val}.png`;
+                if (tile.type === 'sou') return `${localPrefix}Sou${tile.val}.png`;
+                if (tile.type === 'zi') {
+                    if (tile.val === 1) return `${localPrefix}Ton.png`;
+                    if (tile.val === 2) return `${localPrefix}Nan.png`;
+                    if (tile.val === 3) return `${localPrefix}Shaa.png`;
+                    if (tile.val === 4) return `${localPrefix}Pei.png`;
+                    if (tile.val === 5) return `${localPrefix}Chun.png`;
+                    if (tile.val === 6) return `${localPrefix}Hatsu.png`;
+                    if (tile.val === 7) return `${localPrefix}Front.png`;
+                }
+            }
+            let filename = '';
+            if (tile.type === 'man') filename = `m${tile.val}.svg`;
+            else if (tile.type === 'pin') filename = `p${tile.val}.svg`;
+            else if (tile.type === 'sou') filename = `s${tile.val}.svg`;
+            else if (tile.type === 'zi') {
+                if (tile.val <= 4) filename = `z${tile.val}.svg`;
+                else if (tile.id === 'z5') filename = 'z7.svg';
+                else if (tile.id === 'z6') filename = 'z6.svg';
+                else if (tile.id === 'z7') filename = 'z5.svg';
+            }
+            return `${remoteBaseUrl}/${filename}`;
+        };
+
+        // --- Winning Logic ---
+        const checkStandardWin = (counts) => {
+            for (let i = 0; i < TILES.length; i++) {
+                const tileId = TILES[i].id;
+                // 嘗試當作雀頭 (Pair)
+                if (counts[tileId] >= 2) {
+                    counts[tileId] -= 2;
+                    // 檢查剩餘牌是否皆為面子 (Sets)
+                    if (checkSets(counts, 0)) {
+                        counts[tileId] += 2;
+                        return true;
+                    }
+                    counts[tileId] += 2;
+                }
+            }
+            return false;
+        };
+
+        const checkSets = (counts, startIndex) => {
+            let i = startIndex;
+            while (i < TILES.length && counts[TILES[i].id] === 0) { i++; }
+            if (i === TILES.length) return true;
+            const tile = TILES[i];
+            const tileId = tile.id;
+            
+            // 刻子 (Triplet)
+            if (counts[tileId] >= 3) {
+                counts[tileId] -= 3;
+                if (checkSets(counts, i)) { counts[tileId] += 3; return true; }
+                counts[tileId] += 3;
+            }
+            // 順子 (Sequence)
+            if (tile.type !== 'zi' && tile.val <= 7) {
+                const next1 = TILES[i + 1]?.id;
+                const next2 = TILES[i + 2]?.id;
+                if (counts[next1] > 0 && counts[next2] > 0 && TILES[i+1].type === tile.type && TILES[i+2].type === tile.type) {
+                    counts[tileId]--; counts[next1]--; counts[next2]--;
+                    if (checkSets(counts, i)) { counts[tileId]++; counts[next1]++; counts[next2]++; return true; }
+                    counts[tileId]++; counts[next1]++; counts[next2]++;
+                }
+            }
+            return false;
+        };
+
+        // 計算聽牌或檢查胡牌
+        const calculateWaits = (handIds) => {
+            const len = handIds.length;
+            
+            // Case 3N+2: 胡牌檢查 (Winning Check)
+            // 例如: 2, 5, 8, 11, 14, 17 張
+            if (len % 3 === 2) {
+                const counts = {};
+                TILES.forEach(t => counts[t.id] = 0);
+                handIds.forEach(id => counts[id] = (counts[id] || 0) + 1);
+                if (checkStandardWin(counts)) {
+                    return [{ id: 'WIN', type: 'special', label: '胡' }]; // 特殊標記
+                }
+                return []; // 相公 (Not winning)
+            }
+
+            // Case 3N+1: 聽牌檢查 (Wait Analysis)
+            // 例如: 1, 4, 7, 10, 13, 16 張
+            if (len % 3 === 1) {
+                const results = [];
+                const baseCounts = {};
+                TILES.forEach(t => baseCounts[t.id] = 0);
+                handIds.forEach(id => baseCounts[id] = (baseCounts[id] || 0) + 1);
+                for (let i = 0; i < TILES.length; i++) {
+                    const testTile = TILES[i];
+                    if (baseCounts[testTile.id] >= 4) continue;
+                    baseCounts[testTile.id]++;
+                    if (checkStandardWin(baseCounts)) { results.push(testTile); }
+                    baseCounts[testTile.id]--;
+                }
+                return results;
+            }
+
+            return null; // 不符合分析張數 (如 3, 6, 9 張)
+        };
+
+        // --- Components ---
+        const Tile = ({ tile, onClick, size = 'md', className = '', count = null }) => {
+            const blockStyle = 'bg-gradient-to-br from-white to-stone-100 border-b-4 border-r-2 border-slate-300 rounded shadow-sm';
+            // 調整尺寸以適應緊湊佈局
+            const sizeClass = 
+                size === 'sm' ? 'w-8 h-11' : 
+                size === 'lg' ? 'w-9 h-12 md:w-11 md:h-15' : 
+                'w-8 h-11 md:w-10 md:h-14';
+
+            const paddingClass = size === 'sm' ? 'p-0.5' : 'p-0.5 md:p-1';
+            const initialSrc = getTileImageSrc(tile, true);
+            const handleImageError = (e) => {
+                const fallbackSrc = getTileImageSrc(tile, false);
+                if (!e.target.src.includes(fallbackSrc)) { e.target.src = fallbackSrc; } 
+                else { e.target.style.display = 'none'; }
+            };
+
+            return (
+                <button
+                    onClick={onClick}
+                    className={`relative group select-none transition-transform active:scale-95 flex items-center justify-center ${blockStyle} ${sizeClass} ${paddingClass} ${className}`}
+                >
+                    <img src={initialSrc} alt={tile.label} className="w-full h-full object-contain" loading="lazy" onError={handleImageError} />
+                    {count !== null && (
+                        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center shadow-sm z-10">
+                            {count}
+                        </span>
+                    )}
+                </button>
+            );
+        };
+
+        function MahjongCalculator() {
+            const [hand, setHand] = useState([]);
+            const [mode16, setMode16] = useState(true);
+            const [waits, setWaits] = useState(null);
+            const maxTiles = mode16 ? 16 : 13;
+
+            useEffect(() => { setHand([]); setWaits(null); }, [mode16]);
+
+            // 自動觸發分析
+            useEffect(() => {
+                if (hand.length > 0 && (hand.length % 3 === 1 || hand.length % 3 === 2)) {
+                    const waitingTiles = calculateWaits(hand.map(t => t.id), mode16);
+                    setWaits(waitingTiles);
+                } else {
+                    setWaits(null);
+                }
+            }, [hand, mode16]);
+
+            const addTile = (tile) => {
+                // 取消了固定上限，但可以保留一個合理的上限防止當機 (例如 18張)
+                if (hand.length >= 18) return; 
+                setHand([...hand, { ...tile, uid: Math.random().toString(36) }]);
+            };
+            const removeTile = (index) => {
+                const newHand = [...hand]; newHand.splice(index, 1); setHand(newHand);
+            };
+            const sortHand = () => {
+                setHand([...hand].sort((a, b) => SORT_ORDER[a.id] - SORT_ORDER[b.id]));
+            };
+            const clearHand = () => setHand([]);
+
+            const tileGroups = {
+                '萬子': TILES.filter(t => t.type === 'man'),
+                '筒子': TILES.filter(t => t.type === 'pin'),
+                '索子': TILES.filter(t => t.type === 'sou'),
+                '字牌': TILES.filter(t => t.type === 'zi'),
+            };
+
+            const handCounts = hand.reduce((acc, t) => { acc[t.id] = (acc[t.id] || 0) + 1; return acc; }, {});
+
+            // 判斷結果文字
+            let resultTitle = "等待選牌...";
+            let isWinCheck = (hand.length % 3 === 2);
+            if (waits) {
+                if (isWinCheck) resultTitle = "胡牌檢查";
+                else resultTitle = `聽牌分析 (${waits.length}張)`;
+            }
+
+            return (
+                <div className="h-screen bg-emerald-900 font-sans text-slate-900 flex flex-col overflow-hidden">
+                    {/* Header */}
+                    <header className="bg-emerald-950 text-emerald-100 px-3 py-2 shadow-lg border-b border-emerald-800 shrink-0 z-20">
+                        <div className="max-w-4xl mx-auto flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <div className="w-6 h-8 bg-white rounded flex items-center justify-center shadow overflow-hidden p-0.5">
+                                     <img src={getTileImageSrc(TILES.find(t=>t.id==='z6'), true)} alt="Fa" onError={(e)=>e.target.src=getTileImageSrc(TILES.find(t=>t.id==='z6'), false)} />
+                                </div>
+                                <h1 className="text-lg font-bold tracking-wide">麻將聽牌計算機</h1>
+                            </div>
+                            
+                            <div className="flex items-center bg-emerald-900 rounded p-0.5 border border-emerald-700">
+                                <button onClick={() => setMode16(true)} className={`px-2 py-1 rounded text-xs font-medium transition-colors ${mode16 ? 'bg-emerald-600 text-white shadow' : 'text-emerald-400'}`}>台灣16張</button>
+                                <button onClick={() => setMode16(false)} className={`px-2 py-1 rounded text-xs font-medium transition-colors ${!mode16 ? 'bg-emerald-600 text-white shadow' : 'text-emerald-400'}`}>一般13張</button>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Main Content */}
+                    <main className="flex-1 flex flex-col max-w-4xl mx-auto w-full min-h-0">
+                        
+                        {/* Top Control Bar */}
+                        <div className="px-2 py-2 shrink-0 flex items-center justify-between gap-2">
+                             <div className="bg-emerald-800/50 text-emerald-100 px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 border border-emerald-700 flex-1">
+                                <Info className="w-4 h-4 shrink-0" />
+                                <span className="truncate">已選：<strong className="text-white">{hand.length}</strong> 張</span>
+                            </div>
+                            
+                            <div className="flex gap-2">
+                                <button onClick={sortHand} className="px-3 py-1.5 bg-emerald-700 text-emerald-100 rounded hover:bg-emerald-600 transition-colors flex items-center gap-1 text-xs shadow border border-emerald-600">
+                                    <ArrowDownUp size={14} /> 理牌
+                                </button>
+                                <button onClick={clearHand} className="px-3 py-1.5 bg-red-900/80 text-red-100 rounded hover:bg-red-800 transition-colors flex items-center gap-1 text-xs shadow border border-red-800">
+                                    <Trash2 size={14} /> 清空
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Hand Display Area */}
+                        <div className="px-2 pb-1 shrink-0">
+                            <div className="bg-emerald-800 rounded-xl p-2 shadow-inner border border-emerald-700 relative flex flex-col justify-center items-center min-h-[90px] md:min-h-[120px]">
+                                <div className="flex flex-wrap justify-center gap-1 w-full">
+                                    {hand.map((tile, idx) => (
+                                        <Tile 
+                                            key={tile.uid} 
+                                            tile={tile} 
+                                            onClick={() => removeTile(idx)} 
+                                            size="lg" 
+                                            className="cursor-pointer hover:-translate-y-1 transition-transform shadow-lg"
+                                        />
+                                    ))}
+                                    {/* Placeholder (optional visually, removed for cleaner look if variable length) */}
+                                    {hand.length === 0 && <div className="text-emerald-500/50 text-sm">請選擇牌張</div>}
+                                </div>
+                                <div className="mt-1 text-emerald-400 text-[10px] md:text-xs">
+                                    {waits ? '分析完成' : '...'}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Results Area */}
+                        <div className={`transition-all duration-300 ease-in-out px-2 shrink-0 overflow-hidden ${waits ? 'max-h-32 md:max-h-40 opacity-100 mb-2' : 'max-h-0 opacity-0 mb-0'}`}>
+                            <div className="bg-stone-100 rounded-lg p-3 shadow-xl border-l-4 border-amber-500 h-full overflow-y-auto">
+                                <h2 className="text-sm font-bold text-stone-800 mb-2 flex items-center gap-2 sticky top-0 bg-stone-100">
+                                   <span className="w-1.5 h-4 bg-amber-500 rounded-full"></span>
+                                   {resultTitle}
+                                </h2>
+                                
+                                {waits && waits.length > 0 && waits[0].id === 'WIN' ? (
+                                    <div className="flex items-center gap-2 p-2 bg-red-100 border border-red-300 rounded text-red-700 font-bold">
+                                        <span className="text-xl">🎉</span> 自摸 / 已胡牌 (Winning Hand)
+                                    </div>
+                                ) : waits && waits.length > 0 ? (
+                                   <div className="flex flex-wrap gap-2">
+                                        {waits.map((tile) => {
+                                           const heldCount = handCounts[tile.id] || 0;
+                                           const remaining = 4 - heldCount;
+                                           return (
+                                            <div key={tile.id} className="flex items-center gap-1 bg-white p-1 pr-2 rounded border border-stone-200 shadow-sm">
+                                              <Tile tile={tile} size="sm" className="pointer-events-none w-6 h-8" />
+                                              <div className="flex flex-col leading-none">
+                                                <span className="text-[10px] text-stone-500">剩</span>
+                                                <span className="text-xs font-bold text-stone-700">{remaining}</span>
+                                              </div>
+                                            </div>
+                                           )
+                                        })}
+                                   </div>
+                                ) : (
+                                   <div className="text-stone-500 text-xs">
+                                     {isWinCheck ? "未胡牌 (相公 / Not Winning)" : "尚未聽牌 (No Tenpai)"}
+                                   </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Tile Selector */}
+                        <div className="flex-1 overflow-y-auto px-2 pb-2 min-h-0">
+                            <div className="bg-emerald-950/40 backdrop-blur rounded-xl p-2 md:p-4 border border-emerald-800 shadow-2xl space-y-2">
+                                {Object.entries(tileGroups).map(([label, group]) => (
+                                    <div key={label} className="bg-emerald-900/30 rounded p-1.5">
+                                        <h3 className="text-emerald-400 text-[10px] font-bold uppercase tracking-wider mb-1 ml-1">{label}</h3>
+                                        <div className="grid grid-cols-9 gap-1 justify-items-center">
+                                            {group.map((tile) => {
+                                                const remaining = 4 - (handCounts[tile.id] || 0);
+                                                return (
+                                                    <Tile 
+                                                        key={tile.id} 
+                                                        tile={tile} 
+                                                        onClick={() => addTile(tile)}
+                                                        count={remaining} 
+                                                        className={`${remaining === 0 ? 'opacity-40 cursor-not-allowed grayscale' : 'hover:scale-105 active:scale-95 cursor-pointer'} w-full h-auto aspect-[3/4]`}
+                                                    />
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <footer className="py-1 text-center text-emerald-600/50 text-[10px] shrink-0">
+                            © 2025 Mahjong Calc.
+                        </footer>
+
+                    </main>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<MahjongCalculator />);
+    </script>
+</body>
+</html>
