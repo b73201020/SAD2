@@ -5,3 +5,4 @@
 - [隨機點名系統 offline_student_picker.html](offline_student_picker.html)
 - [麻將聽牌計算機 mj2.html](mj2.html)
 - [麻將聽牌計算機 mj3.html](mj3.html) (不用滿16或13張牌)
+- [即時翻譯 InstantStyleTranslator.html](InstantStyleTranslator.html)
