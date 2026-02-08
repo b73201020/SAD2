@@ -6,3 +6,4 @@
 - [麻將聽牌計算機 mj2.html](mj2.html)
 - [麻將聽牌計算機 mj3.html](mj3.html) (不用滿16或13張牌)
 - [即時翻譯 InstantStyleTranslator.html](InstantStyleTranslator.html)
+- [Solar System](solarSystem.html)
