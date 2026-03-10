@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2026 WBC Predictor - Global Tournament Analysis</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- html2canvas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .bracket-scroll::-webkit-scrollbar { height: 8px; }
+        .bracket-scroll::-webkit-scrollbar-track { background: transparent; }
+        .bracket-scroll::-webkit-scrollbar-thumb { background: rgba(16, 185, 129, 0.2); border-radius: 10px; }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useRef, useEffect } = React;
+
+        // --- SVG Icons Component ---
+        const Icon = ({ name, size = 16, className = "" }) => {
+            const icons = {
+                trophy: <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6m12 5h1.5a2.5 2.5 0 0 0 0-5H18M9 22h6m-3-15v15m0-15a6 6 0 0 1 6 6v3a6 6 0 0 1-6 6 6 6 0 0 1-6-6v-3a6 6 0 0 1 6-6Z" />,
+                info: <><circle cx="12" cy="12" r="10"/><path d="M12 16v-4m0-4h.01"/></>,
+                chevron: <path d="m6 9 6 6 6-6"/>,
+                lang: <path d="m5 8 6 6m-7 0 6-6 2-3M2 5h12M7 2h1m11 17-5-10-5 10m2-4h6"/>,
+                download: <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m4-5 5 5 5-5m-5 5V3"/>,
+                loader: <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>,
+                clock: <><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></>,
+                check: <path d="M20 6 9 17l-5-5"/>,
+                sun: <><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41"/></>,
+                moon: <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+            };
+            return (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                    {icons[name]}
+                </svg>
+            );
+        };
+
+        const App = () => {
+            const [lang, setLang] = useState('tw');
+            const [isDarkMode, setIsDarkMode] = useState(true);
+            const [isExporting, setIsExporting] = useState(false);
+            const [exportTime, setExportTime] = useState(null);
+            const [activePoolDropdown, setActivePoolDropdown] = useState(null);
+            const bracketRef = useRef(null);
+
+            const t = {
+                tw: {
+                    title: '2026 世界棒球經典賽', subtitle: '賽事全境預測分析', poolPlay: '分組循環賽', quarterfinals: '半準決賽', semifinals: '準決賽', final: '冠軍決賽', winner: '世界冠軍', selectTeam: '選擇隊伍', rank: '名次', waiting: '等待晉級...', instruction: '點擊隊伍卡片即可手動晉級', exportImg: '匯出戰報', exporting: '產出中...', genTime: '分析時間', theme: '切換主題', locations: { A: '聖胡安', B: '休士頓', C: '東京', D: '邁阿密' }
+                },
+                en: {
+                    title: '2026 World Baseball Classic', subtitle: 'Global Tournament Analysis', poolPlay: 'Pool Play Stage', quarterfinals: 'Quarterfinals', semifinals: 'Semifinals', final: 'Grand Final', winner: 'World Champion', selectTeam: 'Select Team', rank: 'Rank', waiting: 'Waiting...', instruction: 'Click team cards to advance', exportImg: 'Export', exporting: 'Processing...', genTime: 'Generated At', theme: 'Toggle Theme', locations: { A: 'SAN JUAN', B: 'HOUSTON', C: 'TOKYO', D: 'MIAMI' }
+                }
+            };
+
+            const POOL_COLORS = { A: 'from-green-400 to-emerald-600', B: 'from-yellow-300 to-amber-500', C: 'from-rose-400 to-red-600', D: 'from-sky-400 to-blue-600' };
+
+            const ALL_TEAMS = {
+                A: [{ id: 'pr', name: { tw: '波多黎各', en: 'Puerto Rico' }, flag: '🇵🇷' }, { id: 'cu', name: { tw: '古巴', en: 'Cuba' }, flag: '🇨🇺' }, { id: 'ca', name: { tw: '加拿大', en: 'Canada' }, flag: '🇨🇦' }, { id: 'co', name: { tw: '哥倫比亞', en: 'Colombia' }, flag: '🇨🇴' }, { id: 'pa', name: { tw: '巴拿馬', en: 'Panama' }, flag: '🇵🇦' }],
+                B: [{ id: 'mx', name: { tw: '墨西哥', en: 'Mexico' }, flag: '🇲🇽' }, { id: 'it', name: { tw: '義大利', en: 'Italy' }, flag: '🇮🇹' }, { id: 'us', name: { tw: '美國', en: 'USA' }, flag: '🇺🇸' }, { id: 'gb', name: { tw: '英國', en: 'Great Britain' }, flag: '🇬🇧' }, { id: 'br', name: { tw: '巴西', en: 'Brazil' }, flag: '🇧🇷' }],
+                C: [{ id: 'jp', name: { tw: '日本', en: 'Japan' }, flag: '🇯🇵' }, { id: 'kr', name: { tw: '韓國', en: 'Korea' }, flag: '🇰🇷' }, { id: 'au', name: { tw: '澳洲', en: 'Australia' }, flag: '🇦🇺' }, { id: 'tw', name: { tw: '中華台北', en: 'Chinese Taipei' }, flag: '🇹🇼' }, { id: 'cz', name: { tw: '捷克', en: 'Czechia' }, flag: '🇨🇿' }],
+                D: [{ id: 'dr', name: { tw: '多明尼加', en: 'Dominican Rep.' }, flag: '🇩🇴' }, { id: 've', name: { tw: '委內瑞拉', en: 'Venezuela' }, flag: '🇻🇪' }, { id: 'il', name: { tw: '以色列', en: 'Israel' }, flag: '🇮🇱' }, { id: 'nl', name: { tw: '荷蘭', en: 'Netherlands' }, flag: '🇳🇱' }, { id: 'ni', name: { tw: '尼加拉瓜', en: 'Nicaragua' }, flag: '🇳🇮' }]
+            };
+
+            const [selections, setSelections] = useState({ poolPicks: { A1: '', A2: '', B1: '', B2: '', C1: '', C2: '', D1: '', D2: '' }, qf1: null, qf2: null, qf3: null, qf4: null, sf1: null, sf2: null, final: null });
+
+            const getTeam = (id) => id ? Object.values(ALL_TEAMS).flat().find(t => t.id === id) : null;
+
+            const handlePoolChange = (pos, teamId) => {
+                setSelections(prev => {
+                    const newState = { ...prev, poolPicks: { ...prev.poolPicks, [pos]: teamId } };
+                    const pool = pos[0];
+                    const otherPos = pos.endsWith('1') ? `${pool}2` : `${pool}1`;
+                    if (newState.poolPicks[otherPos] === teamId) newState.poolPicks[otherPos] = '';
+                    return { ...newState, qf1: null, qf2: null, qf3: null, qf4: null, sf1: null, sf2: null, final: null };
+                });
+                setActivePoolDropdown(null);
+            };
+
+            const advanceTeam = (stage, teamId) => {
+                if (!teamId) return;
+                setSelections(prev => {
+                    const newState = { ...prev, [stage]: teamId };
+                    if (stage.startsWith('qf')) { newState.sf1 = null; newState.sf2 = null; newState.final = null; }
+                    if (stage.startsWith('sf')) { newState.final = null; }
+                    return newState;
+                });
+            };
+
+            const bracketData = useMemo(() => {
+                const p = selections.poolPicks;
+                return {
+                    qf: [ { id: 'qf1', teamA: getTeam(p.A2), teamB: getTeam(p.B1) }, { id: 'qf2', teamA: getTeam(p.C2), teamB: getTeam(p.D1) }, { id: 'qf3', teamA: getTeam(p.B2), teamB: getTeam(p.A1) }, { id: 'qf4', teamA: getTeam(p.D2), teamB: getTeam(p.C1) } ],
+                    sf: [ { id: 'sf1', teamA: getTeam(selections.qf1), teamB: getTeam(selections.qf2) }, { id: 'sf2', teamA: getTeam(selections.qf3), teamB: getTeam(selections.qf4) } ],
+                    final: { id: 'final', teamA: getTeam(selections.sf1), teamB: getTeam(selections.sf2) }
+                };
+            }, [selections]);
+
+            const handleExport = async () => {
+                if (isExporting) return;
+                setIsExporting(true);
+                const now = new Date();
+                const timeString = `${now.getFullYear()}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getDate().toString().padStart(2, '0')} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+                setExportTime(timeString);
+
+                try {
+                    const element = bracketRef.current;
+                    const canvas = await html2canvas(element, {
+                        backgroundColor: isDarkMode ? '#0c211d' : '#f8fafc',
+                        scale: 2, useCORS: true, logging: false,
+                        width: element.scrollWidth + 80, height: element.scrollHeight + 80, x: -40,
+                        onclone: (clonedDoc) => {
+                            const scrollable = clonedDoc.querySelector('[ref="bracketRef"]');
+                            if (scrollable) scrollable.style.overflow = 'visible';
+                        }
+                    });
+                    const link = document.createElement('a');
+                    link.download = `WBC2026-${timeString.replace(/[:/ ]/g, '-')}.png`;
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                } catch (err) { console.error(err); } finally { setIsExporting(false); }
+            };
+
+            const MatchupCard = ({ title, teamA, teamB, stageKey, selectedId }) => (
+                <div className={`rounded-xl p-4 w-60 shadow-xl border-b-8 transition-all duration-500 ${isDarkMode ? 'bg-white border-gray-100' : 'bg-white border-slate-200 shadow-slate-200'}`}>
+                    <div className="mb-2 text-center border-b border-gray-50 pb-2">
+                        <h3 className="font-black text-gray-400 text-[10px] uppercase italic tracking-widest">{title}</h3>
+                    </div>
+                    <div className="space-y-2">
+                        {[teamA, teamB].map((team, idx) => (
+                            <div key={idx} onClick={() => team && advanceTeam(stageKey, team.id)} className={`flex items-center p-3 rounded-lg border-2 transition-all cursor-pointer h-12 ${selectedId === team?.id && team ? 'border-emerald-500 bg-emerald-50' : 'border-transparent bg-gray-50 hover:bg-gray-100'}`}>
+                                {team ? (
+                                    <>
+                                        <span className="mr-2 text-xl flex-shrink-0">{team.flag}</span>
+                                        <span className="text-[11px] font-black text-gray-700 uppercase whitespace-nowrap overflow-visible">{team.name[lang]}</span>
+                                        {selectedId === team.id && <div className="ml-auto w-4 h-4 bg-emerald-500 rounded-full flex items-center justify-center flex-shrink-0"><div className="w-1.5 h-1.5 bg-white rounded-full"></div></div>}
+                                    </>
+                                ) : <span className="text-gray-300 text-[10px] font-bold w-full text-center italic">{t[lang].waiting}</span>}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+
+            const CustomPoolSelect = ({ poolLetter, rankNum }) => {
+                const pos = `${poolLetter}${rankNum}`;
+                const selectedTeam = getTeam(selections.poolPicks[pos]);
+                const isOpen = activePoolDropdown?.pool === poolLetter && activePoolDropdown?.rank === rankNum;
+                return (
+                    <div className="relative">
+                        <span className="text-[10px] font-bold text-white/70 uppercase block mb-1">{t[lang].rank} {rankNum}</span>
+                        <div onClick={() => setActivePoolDropdown(isOpen ? null : { pool: poolLetter, rank: rankNum })} className="w-full bg-white text-gray-900 py-3 px-3 rounded-lg text-xs font-bold flex items-center justify-between cursor-pointer shadow-md hover:bg-gray-50 transition-colors">
+                            <div className="flex items-center space-x-2 truncate">
+                                <span className="text-xl">{selectedTeam?.flag || '⚪'}</span>
+                                <span className="truncate">{selectedTeam ? selectedTeam.name[lang] : t[lang].selectTeam}</span>
+                            </div>
+                            <Icon name="chevron" size={14} className={`text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                        </div>
+                        {isOpen && (
+                            <div className="absolute z-50 mt-1 w-full bg-white rounded-lg shadow-2xl border border-gray-100 overflow-hidden animate-fade-in">
+                                {ALL_TEAMS[poolLetter].map(team => (
+                                    <div key={team.id} onClick={() => handlePoolChange(pos, team.id)} className="flex items-center justify-between px-3 py-2.5 hover:bg-emerald-50 text-gray-800 text-xs font-semibold cursor-pointer border-b border-gray-50 last:border-0">
+                                        <div className="flex items-center space-x-2"><span className="text-lg">{team.flag}</span><span>{team.name[lang]}</span></div>
+                                        {selections.poolPicks[pos] === team.id && <Icon name="check" size={14} className="text-emerald-500" />}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+
+            return (
+                <div className={`min-h-screen transition-colors duration-700 p-6 ${isDarkMode ? 'bg-[#0c211d] text-white' : 'bg-slate-50 text-slate-900'}`}>
+                    <div className={`max-w-7xl mx-auto mb-12 flex flex-col md:flex-row items-center justify-between border-b pb-8 ${isDarkMode ? 'border-white/5' : 'border-slate-200'}`}>
+                        <div className="flex items-center space-x-5">
+                            <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shadow-2xl transform rotate-3 transition-all duration-500 ${isDarkMode ? 'bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-emerald-500/20' : 'bg-emerald-500 shadow-emerald-500/10'}`}>
+                                <Icon name="trophy" size={32} className="text-white" />
+                            </div>
+                            <div>
+                                <h1 className="text-4xl font-black tracking-tighter uppercase italic leading-none">{t[lang].title}</h1>
+                                <p className={`font-bold tracking-[0.4em] text-[10px] mt-2 uppercase ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>{t[lang].subtitle}</p>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-center gap-4 mt-8 md:mt-0">
+                            <button onClick={() => setIsDarkMode(!isDarkMode)} className={`flex items-center space-x-2 px-5 py-2.5 rounded-full border transition-all text-[11px] font-bold uppercase tracking-widest ${isDarkMode ? 'bg-white/5 border-white/10 hover:bg-white/10 text-white' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600 shadow-sm'}`}>
+                                <Icon name={isDarkMode ? "sun" : "moon"} size={14} className={isDarkMode ? "text-yellow-400" : "text-blue-500"} />
+                                <span>{t[lang].theme}</span>
+                            </button>
+                            <button onClick={handleExport} disabled={isExporting} className="flex items-center space-x-2 bg-emerald-500 hover:bg-emerald-600 px-6 py-2.5 rounded-full text-white transition-all text-[11px] font-black uppercase tracking-widest shadow-lg disabled:opacity-50">
+                                {isExporting ? <Icon name="loader" size={16} className="animate-spin" /> : <Icon name="download" size={16} />}
+                                <span>{isExporting ? t[lang].exporting : t[lang].exportImg}</span>
+                            </button>
+                            <button onClick={() => setLang(lang === 'tw' ? 'en' : 'tw')} className={`flex items-center space-x-2 px-5 py-2.5 rounded-full border transition-all text-[11px] font-bold uppercase tracking-widest ${isDarkMode ? 'bg-white/5 border-white/10 hover:bg-white/10 text-white' : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-600 shadow-sm'}`}>
+                                <Icon name="lang" size={16} className="text-emerald-400" />
+                                <span>{lang === 'tw' ? 'ENGLISH' : '繁體中文'}</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div ref={bracketRef} className={`inline-flex flex-col gap-10 pb-20 items-start px-12 py-16 rounded-3xl transition-colors duration-500 ${isDarkMode ? 'bg-[#0c211d]' : 'bg-slate-50'}`} onClick={(e) => { if (!e.target.closest('.relative')) setActivePoolDropdown(null); }}>
+                        <div className="flex items-center space-x-6 mb-4">
+                            <div className="w-12 h-12 bg-emerald-500 rounded-xl flex items-center justify-center shadow-lg"><Icon name="trophy" size={24} className="text-white" /></div>
+                            <div>
+                                <h2 className={`text-4xl font-black uppercase italic tracking-tighter leading-none ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{t[lang].title}</h2>
+                                <p className={`font-bold tracking-[0.3em] text-[10px] uppercase mt-1 opacity-80 ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>{t[lang].subtitle}</p>
+                            </div>
+                        </div>
+                        <div className="flex gap-16 items-start">
+                            <div className="space-y-10">
+                                <div className={`text-center font-black uppercase text-xs tracking-[0.5em] ${isDarkMode ? 'text-white/20' : 'text-slate-300'}`}>{t[lang].poolPlay}</div>
+                                {['A', 'B', 'C', 'D'].map(pool => (
+                                    <div key={pool} className={`bg-gradient-to-br ${POOL_COLORS[pool]} rounded-2xl p-5 border border-white/20 shadow-2xl space-y-4`}>
+                                        <CustomPoolSelect poolLetter={pool} rankNum={1} /><CustomPoolSelect poolLetter={pool} rankNum={2} />
+                                        <p className="text-[9px] text-white/60 font-black tracking-widest text-right">{t[lang].locations[pool]}</p>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="flex flex-col justify-around min-h-[1100px]">
+                                <div className={`text-center font-black uppercase text-xs tracking-[0.5em] ${isDarkMode ? 'text-white/10' : 'text-slate-300'}`}>{t[lang].quarterfinals}</div>
+                                {bracketData.qf.map(match => <MatchupCard key={match.id} title={t[lang].quarterfinals} teamA={match.teamA} teamB={match.teamB} stageKey={match.id} selectedId={selections[match.id]} />)}
+                            </div>
+                            <div className="flex flex-col justify-around min-h-[1100px] py-24">
+                                <div className={`text-center font-black uppercase text-xs tracking-[0.5em] ${isDarkMode ? 'text-white/10' : 'text-slate-300'}`}>{t[lang].semifinals}</div>
+                                {bracketData.sf.map((match) => <MatchupCard key={match.id} title={t[lang].semifinals} teamA={match.teamA} teamB={match.teamB} stageKey={match.id} selectedId={selections[match.id]} />)}
+                            </div>
+                            <div className="flex flex-col justify-center min-h-[1100px]">
+                                <div className={`text-center font-black uppercase text-xs tracking-[0.5em] mb-4 ${isDarkMode ? 'text-white/10' : 'text-slate-300'}`}>{t[lang].final}</div>
+                                <MatchupCard title={t[lang].final} teamA={bracketData.final.teamA} teamB={bracketData.final.teamB} stageKey="final" selectedId={selections.final} />
+                            </div>
+                            <div className="flex flex-col justify-center items-center min-h-[1100px] pr-24">
+                                <div className={`text-center font-black uppercase text-xs tracking-[0.5em] mb-10 ${isDarkMode ? 'text-white/10' : 'text-slate-300'}`}>{t[lang].winner}</div>
+                                <div className="relative">
+                                    <div className={`absolute -inset-10 rounded-full blur-[60px] opacity-20 transition-all duration-1000 ${selections.final ? 'opacity-50 scale-125 animate-pulse' : ''} ${isDarkMode ? 'bg-emerald-400' : 'bg-emerald-200'}`}></div>
+                                    <div className={`relative border-[16px] w-72 h-72 rounded-full flex flex-col items-center justify-center shadow-2xl transition-colors duration-500 ${isDarkMode ? 'bg-white border-[#0c211d]' : 'bg-white border-slate-200'}`}>
+                                        {selections.final ? (
+                                            <>
+                                                <span className="text-8xl mb-4 drop-shadow-2xl">{getTeam(selections.final).flag}</span>
+                                                <span className="text-gray-900 font-black text-3xl text-center px-8 uppercase italic tracking-tighter leading-none">{getTeam(selections.final).name[lang]}</span>
+                                                <div className="mt-5 bg-emerald-600 text-white px-6 py-2 rounded-full text-[11px] font-black tracking-[0.3em] shadow-lg uppercase">WINNER</div>
+                                            </>
+                                        ) : <div className="text-gray-200 flex flex-col items-center"><Icon name="trophy" size={100} className="opacity-10" /><span className="text-[10px] font-black opacity-20 tracking-[0.6em] uppercase">Pending</span></div>}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {exportTime && (
+                            <div className={`mt-12 flex items-center text-[11px] font-bold tracking-[0.3em] uppercase border-t pt-6 w-full ${isDarkMode ? 'text-white/40 border-white/5' : 'text-slate-400 border-slate-100'}`}>
+                                <Icon name="clock" size={14} className="mr-3 text-emerald-500" />
+                                {t[lang].genTime}: {exportTime}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
