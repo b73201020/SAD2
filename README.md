@@ -8,3 +8,4 @@
 - [即時翻譯 InstantStyleTranslator.html](InstantStyleTranslator.html)
 - [Solar System](solarSystem.html)
 - [2026 WBC冠軍預測](OK_2026WBC.html)
+- [情緒調色盤](emotion-palette_5.html)
