@@ -1,0 +1,1458 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>情緒調色盤 · Emotion Palette</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+/* ══ NIGHT theme (default) ══ */
+:root{
+  --bg:#08071a;--bg2:#100d28;
+  --glass:rgba(255,255,255,0.07);--glass2:rgba(255,255,255,0.12);
+  --border:rgba(255,255,255,0.11);--text:#f0ecff;--dim:#7a73a0;
+  --shadow:rgba(0,0,0,.5);
+  --toolbar-bg:rgba(8,7,26,.94);
+  --stat-bg:rgba(255,255,255,0.07);
+  --card-bg:rgba(255,255,255,0.06);
+  --overlay-bg:radial-gradient(ellipse at 50% 40%,rgba(24,16,46,.88) 0%,rgba(8,7,26,.97) 100%);
+  --happy:#FFD700;--sad:#5B9BFF;--angry:#FF3B30;
+  --surprised:#FF9500;--fearful:#BF5AF2;--disgusted:#30D158;--neutral:#98989A;
+  --transition:all .6s cubic-bezier(.4,0,.2,1);
+}
+
+/* ══ DAY theme ══ */
+body.day{
+  --bg:#c9e8fb;--bg2:#ddf0ff;
+  --glass:rgba(255,255,255,0.55);--glass2:rgba(255,255,255,0.72);
+  --border:rgba(80,130,180,0.22);--text:#1a2a3a;--dim:#5a7a9a;
+  --shadow:rgba(80,120,180,.18);
+  --toolbar-bg:rgba(220,240,255,.92);
+  --stat-bg:rgba(255,255,255,0.65);
+  --card-bg:rgba(255,255,255,0.55);
+  --overlay-bg:radial-gradient(ellipse at 50% 40%,rgba(200,230,255,.92) 0%,rgba(180,215,248,.97) 100%);
+  --happy:#E8A000;--sad:#1a7fd4;--angry:#d42020;
+  --surprised:#d46c00;--fearful:#8833cc;--disgusted:#1a8a3a;--neutral:#607080;
+}
+
+html,body{width:100%;height:100%;overflow:hidden;
+  background:var(--bg);color:var(--text);
+  font-family:'Nunito','Noto Sans TC',system-ui,sans-serif;
+  transition:background .6s ease,color .4s ease}
+#app{width:100%;height:100%;position:relative;overflow:hidden}
+
+/* ══ SKY LAYER ══ */
+#sky{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden;transition:opacity .5s}
+
+/* — Starfield (night) — */
+#stars{position:absolute;inset:0}
+.star{position:absolute;border-radius:50%;background:#fff;
+  animation:twinkle var(--d) ease-in-out infinite alternate;
+  transition:opacity .6s}
+@keyframes twinkle{0%{opacity:.1;transform:scale(.8)}100%{opacity:.6;transform:scale(1.2)}}
+body.day .star{opacity:0!important;animation:none}
+
+/* — Sun (day) — */
+#sun{position:absolute;top:-80px;right:10%;width:160px;height:160px;
+  border-radius:50%;background:radial-gradient(circle,#ffe566 20%,#ffcc00 55%,#ffaa0000 80%);
+  box-shadow:0 0 60px 30px rgba(255,210,0,.35),0 0 120px 60px rgba(255,180,0,.15);
+  transition:top 1s cubic-bezier(.4,0,.2,1),opacity .6s;opacity:0}
+body.day #sun{top:18px;opacity:1}
+
+/* Sun rays */
+#sun-rays{position:absolute;top:38px;right:calc(10% - 80px);width:320px;height:320px;
+  opacity:0;transition:opacity .8s .2s;animation:sunSpin 18s linear infinite}
+@keyframes sunSpin{to{transform:rotate(360deg)}}
+@keyframes sunSpin{to{transform:rotate(360deg)}}
+body.day #sun-rays{opacity:.55}
+.ray{position:absolute;top:50%;left:50%;width:3px;border-radius:2px;
+  background:linear-gradient(#ffee8888,transparent);transform-origin:bottom center}
+
+/* — Clouds (day) — */
+.cloud{position:absolute;border-radius:50px;background:rgba(255,255,255,.88);
+  box-shadow:0 4px 18px rgba(150,180,210,.2);
+  opacity:0;transition:opacity .8s;animation:cloudFloat var(--cd,40s) linear infinite}
+body.day .cloud{opacity:1}
+@keyframes cloudFloat{0%{transform:translateX(0)}100%{transform:translateX(calc(-100vw - 400px))}}
+.cloud::before,.cloud::after{content:'';position:absolute;border-radius:50%;background:inherit}
+.cloud::before{width:60%;height:130%;top:-40%;left:15%}
+.cloud::after{width:45%;height:110%;top:-25%;right:12%}
+
+/* — Moon (night) — */
+#moon{position:absolute;top:22px;left:8%;width:52px;height:52px;border-radius:50%;
+  background:#f0e8d0;box-shadow:0 0 18px 6px rgba(240,232,200,.25),inset -8px -4px 0 rgba(200,185,150,.35);
+  transition:opacity .6s;opacity:1}
+body.day #moon{opacity:0}
+
+/* ══ DAY gradient bg overlay ══ */
+#day-grad{position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:linear-gradient(180deg,#a8d8f0 0%,#c9e8fb 40%,#dff4ff 100%);
+  opacity:0;transition:opacity .6s}
+body.day #day-grad{opacity:1}
+
+/* ══ TOGGLE BUTTON ══ */
+#theme-toggle{position:fixed;top:12px;right:14px;z-index:300;
+  display:flex;align-items:center;gap:6px;
+  background:var(--glass2);backdrop-filter:blur(14px);
+  border:1px solid var(--border);border-radius:99px;
+  padding:6px 12px 6px 8px;cursor:pointer;
+  transition:var(--transition);box-shadow:0 4px 18px var(--shadow);
+  font-family:'Nunito',sans-serif;font-size:12px;font-weight:800;color:var(--text)}
+#theme-toggle:hover{transform:scale(1.07);box-shadow:0 6px 24px var(--shadow)}
+#theme-toggle:active{transform:scale(.95)}
+.tgl-track{width:38px;height:22px;border-radius:99px;position:relative;
+  background:linear-gradient(135deg,#1a1040,#2d1f5e);
+  transition:background .5s;overflow:hidden;flex-shrink:0;border:1px solid rgba(255,255,255,.15)}
+body.day .tgl-track{background:linear-gradient(135deg,#5bb8f5,#87ceeb)}
+.tgl-thumb{position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;
+  background:radial-gradient(circle,#fff8c0,#f0c000);
+  box-shadow:0 1px 5px rgba(0,0,0,.3);
+  transition:transform .4s cubic-bezier(.4,0,.2,1),background .4s}
+body.night .tgl-thumb{background:radial-gradient(circle,#fff,#dde);transform:translateX(0)}
+body.day .tgl-thumb{background:radial-gradient(circle,#fffbe0,#ffd700);transform:translateX(16px)}
+.tgl-stars{position:absolute;inset:0;display:flex;align-items:center;justify-content:flex-end;padding-right:5px;font-size:8px;opacity:.8;transition:opacity .3s}
+body.day .tgl-stars{opacity:0}
+.tgl-sun-ico{position:absolute;inset:0;display:flex;align-items:center;padding-left:5px;font-size:9px;opacity:0;transition:opacity .3s}
+body.day .tgl-sun-ico{opacity:.9}
+#tgl-label{letter-spacing:.5px;user-select:none;transition:color .3s}
+
+
+/* screens */
+.screen{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;
+  justify-content:center;padding:16px;z-index:1}
+.screen.active{display:flex;animation:fadeUp .35s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── LOADING ── */
+#scr-load{gap:20px}
+.load-logo{font-family:'Fredoka One',cursive;font-size:clamp(32px,7vw,64px);text-align:center;
+  background:linear-gradient(135deg,#FFD700 0%,#FF9500 25%,#FF3B30 50%,#BF5AF2 75%,#5B9BFF 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  filter:drop-shadow(0 0 24px rgba(255,180,0,.4));animation:logoPulse 2.5s ease-in-out infinite}
+@keyframes logoPulse{0%,100%{filter:drop-shadow(0 0 18px rgba(255,180,0,.3))}
+  50%{filter:drop-shadow(0 0 42px rgba(255,180,0,.75))}}
+.load-sub{color:var(--dim);font-size:13px;letter-spacing:3px;text-transform:uppercase}
+.load-bar-wrap{width:min(380px,80vw);height:6px;background:var(--glass);border-radius:99px;overflow:hidden}
+.load-bar{height:100%;background:linear-gradient(90deg,#FFD700,#FF3B30,#BF5AF2);
+  border-radius:99px;width:0%;transition:width .4s ease}
+.load-status{color:var(--dim);font-size:13px;text-align:center;min-height:20px}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--dim);
+  padding:8px 22px;border-radius:99px;cursor:pointer;font-family:inherit;font-size:13px;
+  transition:all .2s}
+.btn-ghost:hover{color:var(--text);border-color:rgba(255,255,255,.28)}
+
+/* ── MENU ── */
+#scr-menu{gap:18px;overflow-y:auto;padding:32px 16px}
+.menu-title{font-family:'Fredoka One',cursive;font-size:clamp(26px,6vw,52px);text-align:center;
+  background:linear-gradient(135deg,#FFD700,#FF9500,#FF3B30);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.menu-sub{color:var(--dim);font-size:12px;letter-spacing:3px;text-transform:uppercase}
+.mode-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;
+  width:100%;max-width:800px}
+.mcard{background:var(--card-bg);border:1px solid var(--border);border-radius:20px;
+  padding:22px 20px;cursor:pointer;transition:all .3s;text-align:center;
+  backdrop-filter:blur(10px);position:relative;overflow:hidden}
+.mcard::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 50% 0%,var(--ac,.5px) 0%,transparent 65%);opacity:0;transition:opacity .3s}
+.mcard:hover::before{opacity:.18}
+.mcard:hover{transform:translateY(-5px);border-color:var(--ac);box-shadow:0 14px 42px rgba(0,0,0,.35),0 0 0 1px var(--ac)}
+.mcard .mc-icon{font-size:46px;display:block;margin-bottom:10px}
+.mcard .mc-zh{font-family:'Fredoka One',cursive;font-size:22px;display:block;margin-bottom:3px}
+.mcard .mc-en{font-size:11px;color:var(--dim);letter-spacing:2px;text-transform:uppercase;display:block;margin-bottom:10px}
+.mcard .mc-desc{font-size:12px;color:var(--dim);line-height:1.55;opacity:.85}
+.mc-catcher{--ac:#FFD700}.mc-painter{--ac:#BF5AF2}.mc-mixer{--ac:#30D158}
+.cam-badge{font-size:12px;color:var(--dim);margin-top:4px}
+
+/* ── GAME COMMON ── */
+.g-header{width:100%;max-width:880px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:0 2px}
+.stat{background:var(--stat-bg);border:1px solid var(--border);border-radius:12px;
+  padding:7px 14px;text-align:center;min-width:72px;transition:var(--transition)}
+.stat .sl{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:1px}
+.stat .sv{font-family:'Fredoka One',cursive;font-size:22px;line-height:1.1}
+.btn-back{background:transparent;border:1px solid var(--border);color:var(--dim);
+  width:34px;height:34px;border-radius:10px;cursor:pointer;font-size:15px;
+  display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
+.btn-back:hover{color:var(--text);border-color:rgba(255,255,255,.3)}
+.tbar-wrap{height:4px;background:var(--glass);border-radius:99px;overflow:hidden;width:100%;max-width:880px}
+.tbar{height:100%;background:linear-gradient(90deg,#30D158,#FFD700,#FF3B30);border-radius:99px;transition:width 1s linear}
+
+/* emotion panel */
+.epanel{display:flex;align-items:center;gap:10px;background:var(--glass);
+  border:1px solid var(--border);border-radius:14px;padding:8px 12px;width:100%;max-width:880px;flex-shrink:0}
+.ecam{width:56px;height:56px;border-radius:10px;overflow:hidden;flex-shrink:0;background:#000}
+.ecam video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.ecur{flex:1;min-width:0}
+.ecur-row{display:flex;align-items:center;gap:8px}
+.e-emoji-big{font-size:28px;flex-shrink:0}
+.e-name{font-family:'Fredoka One',cursive;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.e-conf-wrap{height:3px;background:rgba(255,255,255,.1);border-radius:99px;overflow:hidden;margin-top:3px}
+.e-conf-fill{height:100%;border-radius:99px;transition:width .18s,background .3s}
+.ebtns{display:flex;flex-wrap:wrap;gap:5px;justify-content:flex-end}
+.ebtn{background:var(--glass);border:1px solid var(--border);border-radius:8px;
+  padding:3px 8px 3px 6px;cursor:pointer;font-size:11px;font-family:inherit;color:var(--text);
+  display:flex;align-items:center;gap:4px;transition:all .15s;white-space:nowrap}
+.ebtn:hover,.ebtn.act{background:rgba(255,255,255,.15);transform:scale(1.07)}
+.ebtn .edot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.ebtn .kbd{display:inline-flex;align-items:center;justify-content:center;
+  width:14px;height:14px;border-radius:3px;font-size:9px;font-weight:800;line-height:1;
+  background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);
+  color:rgba(255,255,255,.6);font-family:monospace;letter-spacing:0;flex-shrink:0}
+
+/* btn-primary */
+.btn-p{background:linear-gradient(135deg,#7B5AF2,#BF5AF2);color:#fff;border:none;
+  border-radius:11px;padding:13px 26px;font-family:inherit;font-size:14px;font-weight:700;
+  cursor:pointer;transition:all .2s;width:100%}
+.btn-p:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(191,90,242,.4)}
+.btn-s{background:var(--glass);color:var(--dim);border:1px solid var(--border);
+  border-radius:11px;padding:11px 26px;font-family:inherit;font-size:13px;font-weight:600;
+  cursor:pointer;transition:all .2s;width:100%}
+.btn-s:hover{color:var(--text);border-color:rgba(255,255,255,.25)}
+
+/* ── CATCHER ── */
+#scr-catcher{gap:10px;padding:14px}
+.catch-area{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;width:100%;max-width:480px}
+.catch-prompt{font-size:12px;color:var(--dim);letter-spacing:2px;text-transform:uppercase}
+.target-bub{width:min(190px,42vw);height:min(190px,42vw);border-radius:50%;
+  display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px;
+  font-family:'Fredoka One',cursive;position:relative;transition:all .4s;border:2px solid transparent}
+.target-bub::after{content:'';position:absolute;inset:-10px;border-radius:50%;
+  border:2px dashed currentColor;animation:spin 5s linear infinite;opacity:.3}
+@keyframes spin{to{transform:rotate(360deg)}}
+.tb-emoji{font-size:52px;line-height:1}
+.tb-zh{font-size:19px}
+.tb-en{font-size:12px;opacity:.7}
+.match-bar{width:min(190px,42vw);height:7px;background:rgba(255,255,255,.1);border-radius:99px;overflow:hidden}
+.match-fill{height:100%;border-radius:99px;transition:width .08s}
+.combo-msg{font-family:'Fredoka One',cursive;font-size:15px;color:#FFD700;min-height:22px;text-align:center;animation:pop .2s ease}
+@keyframes pop{0%{transform:scale(.4);opacity:0}60%{transform:scale(1.25)}100%{transform:scale(1);opacity:1}}
+
+/* ── PAINTER ── */
+#scr-painter{padding:0;gap:0;justify-content:flex-start}
+.ptoolbar{width:100%;display:flex;align-items:center;gap:8px;padding:8px 12px;
+  background:rgba(8,7,26,.94);backdrop-filter:blur(14px);border-bottom:1px solid var(--border);
+  flex-shrink:0;z-index:10}
+.p-color-dot{width:28px;height:28px;border-radius:50%;border:2px solid rgba(255,255,255,.25);
+  transition:background .25s,box-shadow .25s;flex-shrink:0}
+.p-e-label{font-family:'Fredoka One',cursive;font-size:15px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btn-tool{background:var(--glass);border:1px solid var(--border);color:var(--text);
+  border-radius:7px;padding:5px 11px;font-family:inherit;font-size:12px;cursor:pointer;
+  transition:all .15s;white-space:nowrap}
+.btn-tool:hover{background:rgba(255,255,255,.14)}
+.btn-pp{background:var(--glass);border:1px solid var(--border);color:var(--text);
+  border-radius:7px;padding:5px 13px;font-family:inherit;font-size:13px;cursor:pointer;
+  transition:all .2s;white-space:nowrap;font-weight:800;letter-spacing:.5px}
+.btn-pp:hover{background:rgba(255,255,255,.18);transform:scale(1.05)}
+.btn-pp.playing{border-color:rgba(255,100,100,.5);color:#FF6B6B}
+.btn-pp.playing:hover{background:rgba(255,100,100,.1)}
+
+#painter-wrap{flex:1;width:100%;position:relative;overflow:hidden;min-height:0}
+#painter-canvas{width:100%;height:100%;cursor:crosshair;display:block}
+
+/* ─ Start Overlay ─ */
+#p-overlay{position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:18px;
+  background:var(--overlay-bg);
+  backdrop-filter:blur(4px);transition:opacity .4s,visibility .4s}
+#p-overlay.hidden{opacity:0;visibility:hidden;pointer-events:none}
+.p-ov-title{font-family:'Fredoka One',cursive;font-size:clamp(26px,6vw,48px);
+  text-align:center;line-height:1.15;
+  background:linear-gradient(135deg,#FFD700,#FF9500,#FF3B30,#BF5AF2,#5B9BFF);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  filter:drop-shadow(0 0 24px rgba(255,150,0,.3));animation:logoPulse 2.5s ease-in-out infinite}
+.p-ov-sub{color:var(--dim);font-size:13px;text-align:center;line-height:1.7;max-width:320px}
+.p-ov-emos{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;max-width:380px}
+.p-ov-e{display:flex;flex-direction:column;align-items:center;gap:3px;
+  background:var(--glass);border:1px solid var(--border);border-radius:10px;
+  padding:8px 10px;min-width:50px;transition:transform .2s}
+.p-ov-e:hover{transform:scale(1.1)}
+.p-ov-e .oe{font-size:22px}
+.p-ov-e .on{font-size:9px;font-weight:800;letter-spacing:.5px}
+.p-ov-e .oc{font-size:8px;color:var(--dim)}
+.btn-start{background:linear-gradient(135deg,#FFD700,#FF9500);color:#1a1000;border:none;
+  border-radius:14px;padding:14px 38px;font-family:'Fredoka One',cursive;font-size:20px;
+  cursor:pointer;transition:all .25s;box-shadow:0 8px 32px rgba(255,180,0,.35)}
+.btn-start:hover{transform:translateY(-3px) scale(1.04);box-shadow:0 14px 42px rgba(255,180,0,.55)}
+.btn-start:active{transform:scale(.97)}
+
+/* ─ Pause Overlay ─ */
+#p-pause{position:absolute;inset:0;z-index:18;display:none;
+  align-items:center;justify-content:center;
+  background:rgba(var(--bg-rgb,8,7,26),.72);backdrop-filter:blur(6px)}
+#p-pause.show{display:flex}
+.p-pause-box{text-align:center;display:flex;flex-direction:column;align-items:center;gap:14px}
+.p-pause-icon{font-size:64px;animation:floatY 2s ease-in-out infinite}
+@keyframes floatY{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.p-pause-txt{font-family:'Fredoka One',cursive;font-size:32px;color:var(--text)}
+.p-pause-sub{font-size:13px;color:var(--dim)}
+
+/* ─ Brush cursor dot ─ */
+#p-cursor{position:absolute;pointer-events:none;z-index:15;
+  width:18px;height:18px;border-radius:50%;transform:translate(-50%,-50%);
+  transition:background .2s,box-shadow .2s,width .15s,height .15s;
+  mix-blend-mode:screen;display:none}
+
+/* ─ Painter strip ─ */
+.p-strip{width:100%;display:flex;flex-shrink:0;background:rgba(8,7,26,.92);
+  border-top:1px solid var(--border)}
+.pek{flex:1;text-align:center;padding:6px 2px;cursor:pointer;font-size:10px;font-weight:800;
+  transition:all .15s;border-top:3px solid transparent;color:var(--dim);user-select:none}
+.pek:hover,.pek.act{border-top-color:var(--ec,#888);background:rgba(255,255,255,.06);color:var(--text)}
+.pek .pe-em{font-size:20px;display:block;line-height:1.2}
+.pek .pe-kbd{display:inline-flex;align-items:center;justify-content:center;
+  width:13px;height:13px;border-radius:3px;font-size:8px;font-weight:800;line-height:1;
+  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.18);
+  color:rgba(255,255,255,.5);font-family:monospace;margin-top:1px}
+
+/* ── MIXER ── */
+#scr-mixer{gap:10px;padding:14px}
+.mix-area{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;width:100%;max-width:480px}
+.mix-prompt{font-size:12px;color:var(--dim);letter-spacing:2px;text-transform:uppercase}
+.mix-target-circle{width:min(110px,26vw);height:min(110px,26vw);border-radius:50%;
+  border:3px solid rgba(255,255,255,.2);transition:background .5s,box-shadow .5s}
+.mix-target-name{font-family:'Fredoka One',cursive;font-size:20px;text-align:center}
+.mix-steps-row{display:flex;align-items:center;gap:12px;padding:14px 20px;
+  background:var(--glass);border:1px solid var(--border);border-radius:16px}
+.mstep{display:flex;flex-direction:column;align-items:center;gap:5px;opacity:.35;transition:all .3s}
+.mstep.act{opacity:1}.mstep.done{opacity:.85}
+.mstep-circle{width:50px;height:50px;border-radius:50%;border:2px dashed rgba(255,255,255,.3);
+  display:flex;align-items:center;justify-content:center;font-size:24px;transition:all .3s}
+.mstep.act .mstep-circle{border-style:solid;animation:pulse 1s ease-in-out infinite}
+.mstep.done .mstep-circle{border-style:solid;border-color:#30D158;background:rgba(48,209,88,.12)}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,255,255,.25)}50%{box-shadow:0 0 0 8px rgba(255,255,255,0)}}
+.mstep-lbl{font-size:10px;color:var(--dim)}
+.mx-op{font-size:22px;color:var(--dim);font-family:'Fredoka One',cursive}
+.mix-result-bub{width:50px;height:50px;border-radius:50%;border:2px dashed rgba(255,255,255,.3);
+  display:flex;align-items:center;justify-content:center;font-size:22px;transition:all .3s}
+.mix-result-bub.ready{border-style:solid;animation:sparkle .5s ease}
+@keyframes sparkle{0%{transform:scale(.3);opacity:0}60%{transform:scale(1.4)}100%{transform:scale(1);opacity:1}}
+
+/* ── RESULTS ── */
+#scr-results{gap:20px}
+.rpanel{background:var(--glass);border:1px solid var(--border);border-radius:24px;
+  padding:28px;width:min(400px,94vw);text-align:center;backdrop-filter:blur(12px);
+  display:flex;flex-direction:column;gap:14px}
+.r-mode{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:2px}
+.r-title{font-family:'Fredoka One',cursive;font-size:28px}
+.r-score{font-family:'Fredoka One',cursive;font-size:68px;line-height:1}
+.r-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.rstat{background:rgba(0,0,0,.25);border-radius:11px;padding:10px}
+.rstat .rl{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px}
+.rstat .rv{font-family:'Fredoka One',cursive;font-size:22px}
+.btn-row{display:flex;gap:10px}
+.btn-row .btn-p,.btn-row .btn-s{flex:1}
+
+/* particles */
+#pcanvas{position:fixed;inset:0;pointer-events:none;z-index:200}
+/* flash */
+#flash{position:fixed;inset:0;pointer-events:none;z-index:190;opacity:0;transition:opacity .12s}
+#flash.show{opacity:.18;transition:none}
+</style>
+</head>
+<body>
+<canvas id="pcanvas"></canvas>
+<div id="flash"></div>
+
+<!-- ══ SKY LAYER ══ -->
+<div id="sky">
+  <div id="day-grad"></div>
+  <div id="moon"></div>
+  <div id="sun"></div>
+  <svg id="sun-rays" viewBox="0 0 320 320" style="position:absolute;top:38px;right:calc(10% - 80px);width:320px;height:320px;opacity:0;transition:opacity .8s .2s;animation:sunSpin 18s linear infinite;pointer-events:none">
+    <defs><radialGradient id="rg"><stop offset="0%" stop-color="#ffe566" stop-opacity=".9"/><stop offset="100%" stop-color="#ffcc00" stop-opacity="0"/></radialGradient></defs>
+    <g id="rays-g"></g>
+  </svg>
+  <div id="stars"></div>
+  <!-- Clouds generated by JS -->
+</div>
+
+<!-- ══ THEME TOGGLE ══ -->
+<button id="theme-toggle" onclick="toggleTheme()" title="切換白天/黑夜 Toggle Day/Night">
+  <div class="tgl-track">
+    <div class="tgl-stars">✦✦</div>
+    <div class="tgl-sun-ico">☀</div>
+    <div class="tgl-thumb"></div>
+  </div>
+  <span id="tgl-label">夜晚 Night</span>
+</button>
+
+<video id="main-vid" autoplay muted playsinline
+  style="display:none;position:absolute;left:-9999px;width:1px;height:1px"></video>
+
+<div id="app">
+
+<!-- ══════════ LOADING ══════════ -->
+<div class="screen active" id="scr-load">
+  <div class="load-logo">情緒調色盤<br>Emotion Palette</div>
+  <div class="load-sub">AI Face Expression Game · 表情遊戲</div>
+  <div class="load-bar-wrap"><div class="load-bar" id="load-bar"></div></div>
+  <div class="load-status" id="load-status">初始化中… Initializing…</div>
+  <button class="btn-ghost" id="btn-skip">略過攝影機 · Skip Camera</button>
+</div>
+
+<!-- ══════════ MENU ══════════ -->
+<div class="screen" id="scr-menu">
+  <div class="menu-title">情緒調色盤</div>
+  <div class="menu-sub">Emotion Palette · Choose Your Mode</div>
+  <div class="mode-grid">
+    <div class="mcard mc-catcher" onclick="startGame('catcher')">
+      <span class="mc-icon">🎨</span>
+      <span class="mc-zh">顏色捕手</span>
+      <span class="mc-en">Color Catcher</span>
+      <span class="mc-desc">看到目標情緒，做出對應表情！<br>60秒內捕捉越多顏色越好<br>Match emotions to catch colors!</span>
+    </div>
+    <div class="mcard mc-painter" onclick="startGame('painter')">
+      <span class="mc-icon">🖼️</span>
+      <span class="mc-zh">情緒畫家</span>
+      <span class="mc-en">Emotion Painter</span>
+      <span class="mc-desc">用表情當畫筆！情緒決定顏色<br>創作專屬的情緒畫作<br>Paint with your emotions!</span>
+    </div>
+    <div class="mcard mc-mixer" onclick="startGame('mixer')">
+      <span class="mc-icon">🧪</span>
+      <span class="mc-zh">調色師對決</span>
+      <span class="mc-en">Color Mix Challenge</span>
+      <span class="mc-desc">依序做出兩種表情混合顏色<br>60秒挑戰關卡數<br>Mix two emotions for the target!</span>
+    </div>
+  </div>
+  <div class="cam-badge" id="cam-badge"></div>
+</div>
+
+<!-- ══════════ CATCHER ══════════ -->
+<div class="screen" id="scr-catcher">
+  <div class="g-header">
+    <button class="btn-back" onclick="goMenu()">←</button>
+    <div class="stat"><div class="sl">分數 Score</div><div class="sv" id="c-score">0</div></div>
+    <div class="stat"><div class="sl">時間 Time</div><div class="sv" id="c-timer">60</div></div>
+    <div class="stat"><div class="sl">連擊 Combo</div><div class="sv" id="c-combo">0</div></div>
+  </div>
+  <div class="tbar-wrap"><div class="tbar" id="c-tbar" style="width:100%"></div></div>
+  <div class="catch-area">
+    <div class="catch-prompt">做出這個表情 · Make this expression</div>
+    <div class="target-bub" id="c-bub">
+      <span class="tb-emoji" id="c-t-emo">😊</span>
+      <span class="tb-zh" id="c-t-zh">開心</span>
+      <span class="tb-en" id="c-t-en">Happy</span>
+    </div>
+    <div class="match-bar"><div class="match-fill" id="c-mfill" style="width:0%"></div></div>
+    <div class="combo-msg" id="c-cmsg"></div>
+  </div>
+  <div class="epanel">
+    <div class="ecam"><video id="catcher-vid" autoplay muted playsinline></video></div>
+    <div class="ecur">
+      <div class="ecur-row">
+        <span class="e-emoji-big" id="c-cur-em">😐</span>
+        <div style="flex:1;min-width:0">
+          <div class="e-name" id="c-cur-nm">平靜 Neutral</div>
+          <div class="e-conf-wrap"><div class="e-conf-fill" id="c-conf" style="width:0%;background:var(--neutral)"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="ebtns" id="c-btns"></div>
+  </div>
+</div>
+
+<!-- ══════════ PAINTER ══════════ -->
+<div class="screen" id="scr-painter">
+  <div class="ptoolbar">
+    <button class="btn-back" onclick="goMenu()" style="flex-shrink:0">←</button>
+    <div class="p-color-dot" id="p-dot"></div>
+    <div class="p-e-label" id="p-label">😐 平靜 Neutral</div>
+    <button class="btn-pp" id="btn-pp" onclick="togglePause()">⏸ 暫停</button>
+    <button class="btn-tool" onclick="clearPainter()">🗑 清除</button>
+    <button class="btn-tool" onclick="savePainting()">💾 儲存</button>
+  </div>
+  <div id="painter-wrap">
+    <canvas id="painter-canvas"></canvas>
+    <div id="p-cursor"></div>
+    <!-- Start overlay -->
+    <div id="p-overlay">
+      <div class="p-ov-title">🎨 情緒畫家<br>Emotion Painter</div>
+      <div class="p-ov-sub">用你的表情當畫筆，每種情緒都有獨特筆觸與顏色！<br>Use your expressions as a brush — each emotion paints differently!</div>
+      <div class="p-ov-emos" id="p-ov-emos"></div>
+      <button class="btn-start" onclick="startPainting()">▶ 開始作畫 Start</button>
+    </div>
+    <!-- Pause overlay -->
+    <div id="p-pause">
+      <div class="p-pause-box">
+        <div class="p-pause-icon">⏸</div>
+        <div class="p-pause-txt">暫停中 Paused</div>
+        <div class="p-pause-sub">點擊繼續按鈕或按 Space 繼續<br>Click Resume or press Space to continue</div>
+      </div>
+    </div>
+  </div>
+  <div class="p-strip" id="p-strip"></div>
+</div>
+
+<!-- ══════════ MIXER ══════════ -->
+<div class="screen" id="scr-mixer">
+  <div class="g-header">
+    <button class="btn-back" onclick="goMenu()">←</button>
+    <div class="stat"><div class="sl">分數 Score</div><div class="sv" id="m-score">0</div></div>
+    <div class="stat"><div class="sl">時間 Time</div><div class="sv" id="m-timer">60</div></div>
+    <div class="stat"><div class="sl">關卡 Level</div><div class="sv" id="m-level">1</div></div>
+  </div>
+  <div class="tbar-wrap"><div class="tbar" id="m-tbar" style="width:100%"></div></div>
+  <div class="mix-area">
+    <div class="mix-prompt">調出這個顏色 · Mix this color</div>
+    <div class="mix-target-circle" id="m-circle"></div>
+    <div class="mix-target-name" id="m-tname">橙紅 Orange-Red</div>
+    <div class="mix-steps-row">
+      <div class="mstep act" id="ms1">
+        <div class="mstep-circle" id="ms1c">❓</div>
+        <div class="mstep-lbl">步驟1 Step1</div>
+      </div>
+      <div class="mx-op">+</div>
+      <div class="mstep" id="ms2">
+        <div class="mstep-circle" id="ms2c">❓</div>
+        <div class="mstep-lbl">步驟2 Step2</div>
+      </div>
+      <div class="mx-op">→</div>
+      <div class="mix-result-bub" id="m-rbub">🎨</div>
+    </div>
+  </div>
+  <div class="epanel">
+    <div class="ecam"><video id="mixer-vid" autoplay muted playsinline></video></div>
+    <div class="ecur">
+      <div class="ecur-row">
+        <span class="e-emoji-big" id="m-cur-em">😐</span>
+        <div style="flex:1;min-width:0">
+          <div class="e-name" id="m-cur-nm">平靜 Neutral</div>
+          <div class="e-conf-wrap"><div class="e-conf-fill" id="m-conf" style="width:0%;background:var(--neutral)"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="ebtns" id="m-btns"></div>
+  </div>
+</div>
+
+<!-- ══════════ RESULTS ══════════ -->
+<div class="screen" id="scr-results">
+  <div class="rpanel">
+    <div class="r-mode" id="r-mode">COLOR CATCHER</div>
+    <div class="r-title">遊戲結束！Game Over!</div>
+    <div class="r-score" id="r-score">0</div>
+    <div class="r-stats">
+      <div class="rstat"><div class="rl">最高連擊 Best Combo</div><div class="rv" id="r-combo">0</div></div>
+      <div class="rstat"><div class="rl">達成 Achieved</div><div class="rv" id="r-done">0</div></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn-p" id="r-again" onclick="playAgain()">再玩一次 Play Again</button>
+      <button class="btn-s" onclick="goMenu()">選關 Menu</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- #app -->
+
+<script>
+// ══════════════════════════════════════════════
+// CONSTANTS
+// ══════════════════════════════════════════════
+const EMO = {
+  happy:     {zh:'開心',en:'Happy',    c:'#FFD700',e:'😊',k:'H'},
+  sad:       {zh:'悲傷',en:'Sad',      c:'#5B9BFF',e:'😢',k:'S'},
+  angry:     {zh:'憤怒',en:'Angry',    c:'#FF3B30',e:'😠',k:'A'},
+  surprised: {zh:'驚訝',en:'Surprised',c:'#FF9500',e:'😲',k:'U'},
+  fearful:   {zh:'恐懼',en:'Fearful',  c:'#BF5AF2',e:'😨',k:'F'},
+  disgusted: {zh:'厭惡',en:'Disgusted',c:'#30D158',e:'🤢',k:'D'},
+  neutral:   {zh:'平靜',en:'Neutral',  c:'#98989A',e:'😐',k:'N'},
+};
+const EMO_KEYS = Object.keys(EMO);
+const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights';
+
+const MIXES = [
+  {a:'happy',   b:'angry',    r:'#FF6A00',zh:'橙紅',  en:'Orange-Red'},
+  {a:'sad',     b:'angry',    r:'#8B2BAC',zh:'暗紫',  en:'Dark Violet'},
+  {a:'happy',   b:'sad',      r:'#4DBB72',zh:'翠綠',  en:'Emerald'},
+  {a:'surprised',b:'fearful', r:'#DD55CC',zh:'洋紅',  en:'Magenta'},
+  {a:'neutral', b:'happy',    r:'#CCB020',zh:'暗金',  en:'Dark Gold'},
+  {a:'disgusted',b:'sad',     r:'#2E70C0',zh:'湛藍',  en:'Azure Blue'},
+  {a:'angry',   b:'fearful',  r:'#CC2277',zh:'玫瑰紅',en:'Deep Rose'},
+  {a:'happy',   b:'disgusted',r:'#90CF30',zh:'黃綠',  en:'Lime'},
+];
+
+// ══════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════
+const G = {
+  modelsLoaded:false, cameraActive:false, camTried:false, stream:null,
+  curEmo:'neutral', conf:0, mode:null,
+  // catcher
+  cs:0, cCombo:0, cMaxCombo:0, cCaught:0,
+  cTarget:null, cHold:0, cTimer:60, cIv:null, cRAF:null,
+  // painter
+  pAutoX:400, pAutoY:300, pAutoVX:1.5, pAutoVY:1,
+  pMouseX:0, pMouseY:0, pMouseOn:false, pRAF:null, pLastX:null, pLastY:null,
+  pCtx:null,
+  // mixer
+  ms:0, mLevel:1, mTimer:60, mIv:null, mMix:null, mStep:0, mHold:0, mRAF:null,
+};
+
+// ══════════════════════════════════════════════
+// PARTICLES
+// ══════════════════════════════════════════════
+const pc = document.getElementById('pcanvas');
+const px = pc.getContext('2d');
+let parts = [];
+function resizePC(){pc.width=innerWidth;pc.height=innerHeight}
+resizePC(); addEventListener('resize',resizePC);
+
+function burst(x,y,color,n=14){
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2, spd=2+Math.random()*5;
+    parts.push({x,y,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd-1.5,
+      color,r:3+Math.random()*6,life:1,dec:.018+Math.random()*.022});
+  }
+}
+(function animParts(){
+  px.clearRect(0,0,pc.width,pc.height);
+  parts=parts.filter(p=>p.life>0);
+  for(const p of parts){
+    p.x+=p.vx; p.y+=p.vy; p.vy+=.14; p.vx*=.97; p.life-=p.dec;
+    px.globalAlpha=p.life;px.fillStyle=p.color;
+    px.beginPath();px.arc(p.x,p.y,p.r*p.life,0,Math.PI*2);px.fill();
+  }
+  px.globalAlpha=1;
+  requestAnimationFrame(animParts);
+})();
+
+// flash
+function flash(c){
+  const f=document.getElementById('flash');
+  f.style.background=c; f.classList.add('show');
+  setTimeout(()=>f.classList.remove('show'),120);
+}
+
+// ══════════════════════════════════════════════
+// SKY SYSTEM
+// ══════════════════════════════════════════════
+let isDark=true;
+
+(function buildSky(){
+  // Stars
+  const sc=document.getElementById('stars');
+  for(let i=0;i<90;i++){
+    const s=document.createElement('div'); s.className='star';
+    const sz=.8+Math.random()*2.2;
+    s.style.cssText=`width:${sz}px;height:${sz}px;left:${Math.random()*100}%;top:${Math.random()*100}%;--d:${2+Math.random()*4}s;animation-delay:${Math.random()*4}s`;
+    sc.appendChild(s);
+  }
+
+  // Sun rays SVG
+  const rg=document.getElementById('rays-g');
+  if(rg){
+    const N=16;
+    for(let i=0;i<N;i++){
+      const a=(i/N)*360, len=40+Math.random()*55, w=3+Math.random()*5;
+      const r=document.createElementNS('http://www.w3.org/2000/svg','rect');
+      r.setAttribute('x',158); r.setAttribute('y',50);
+      r.setAttribute('width',w); r.setAttribute('height',len);
+      r.setAttribute('rx',w/2);
+      r.setAttribute('fill','url(#rg)');
+      r.setAttribute('transform',`rotate(${a},160,160)`);
+      rg.appendChild(r);
+    }
+  }
+  // also animate the svg element
+  const sv=document.getElementById('sun-rays');
+  if(sv){sv.style.animation='sunSpin 18s linear infinite';}
+
+  // Clouds
+  const sky=document.getElementById('sky');
+  const cloudData=[
+    {w:160,h:54,top:'8%', delay:'0s',  dur:'50s', left:'110%'},
+    {w:240,h:70,top:'14%',delay:'12s', dur:'65s', left:'110%'},
+    {w:120,h:40,top:'22%',delay:'28s', dur:'42s', left:'110%'},
+    {w:200,h:62,top:'6%', delay:'38s', dur:'58s', left:'110%'},
+    {w:90, h:32,top:'30%',delay:'6s',  dur:'36s', left:'110%'},
+  ];
+  cloudData.forEach((c,i)=>{
+    const d=document.createElement('div'); d.className='cloud';
+    d.style.cssText=`width:${c.w}px;height:${c.h}px;top:${c.top};left:${c.left};
+      --cd:${c.dur};animation-delay:-${c.delay};animation-duration:${c.dur}`;
+    sky.appendChild(d);
+  });
+})();
+
+function toggleTheme(){
+  isDark=!isDark;
+  document.body.classList.toggle('day',!isDark);
+  document.body.classList.toggle('night',isDark);
+  document.getElementById('tgl-label').textContent=isDark?'夜晚 Night':'白天 Day';
+  // Show/hide sun-rays svg
+  const sv=document.getElementById('sun-rays');
+  if(sv) sv.style.opacity=isDark?'0':'0.55';
+  // If in painter, repaint bg
+  if(G.mode==='painter'&&G.pPlaying&&!G.pPaused) paintBg();
+}
+
+// Init night class
+document.body.classList.add('night');
+
+// ══════════════════════════════════════════════
+// SCREENS
+// ══════════════════════════════════════════════
+function show(id){
+  document.querySelectorAll('.screen').forEach(s=>{s.classList.remove('active');s.style.display='none'});
+  const el=document.getElementById(id);
+  el.style.display='flex';
+  requestAnimationFrame(()=>el.classList.add('active'));
+}
+
+// ══════════════════════════════════════════════
+// MODELS + CAMERA
+// ══════════════════════════════════════════════
+async function loadModels(){
+  const bar=document.getElementById('load-bar');
+  const st=document.getElementById('load-status');
+  try{
+    if(typeof faceapi==='undefined') throw new Error('face-api not loaded');
+    st.textContent='載入人臉偵測… Loading face detector…';
+    bar.style.width='15%';
+    await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
+    bar.style.width='65%';
+    st.textContent='載入表情辨識… Loading expression net…';
+    await faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL);
+    bar.style.width='100%';
+    st.textContent='✅ 載入完成！Models ready!';
+    G.modelsLoaded=true;
+    await sleep(500);
+  }catch(e){
+    console.warn('Models failed:',e);
+    bar.style.width='100%'; bar.style.background='#FF9500';
+    st.textContent='⚠️ 模型載入失敗，使用按鈕模式 Button mode active';
+    await sleep(1600);
+  }
+  goMenu();
+}
+
+async function tryCamera(){
+  if(G.camTried) return;
+  G.camTried=true;
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({video:{width:320,height:240,facingMode:'user'}});
+    G.stream=stream; G.cameraActive=true;
+    const v=document.getElementById('main-vid');
+    v.srcObject=stream;
+    await new Promise(r=>{v.onloadeddata=r; setTimeout(r,3000)});
+  }catch(e){ G.cameraActive=false; }
+}
+
+let detSrc=null, detTmo=null;
+async function startDetect(vid){
+  detSrc=vid;
+  async function loop(){
+    if(detSrc!==vid||!G.modelsLoaded||!G.cameraActive) return;
+    try{
+      if(vid.readyState>=2){
+        const d=await faceapi
+          .detectSingleFace(vid,new faceapi.TinyFaceDetectorOptions({inputSize:128,scoreThreshold:.3}))
+          .withFaceExpressions();
+        if(d&&d.expressions){
+          const ex=d.expressions; let be='neutral',bs=0;
+          for(const[k,v]of Object.entries(ex)){if(EMO_KEYS.includes(k)&&v>bs){bs=v;be=k;}}
+          applyEmo(be,bs);
+        }
+      }
+    }catch(e){}
+    detTmo=setTimeout(loop,80);
+  }
+  loop();
+}
+function stopDetect(){detSrc=null; clearTimeout(detTmo);}
+
+function mirrorTo(vid){
+  if(G.stream) vid.srcObject=G.stream;
+}
+
+// ══════════════════════════════════════════════
+// EMOTION APPLY
+// ══════════════════════════════════════════════
+function applyEmo(emo,conf){
+  G.curEmo=emo; G.conf=conf;
+  const info=EMO[emo]||EMO.neutral;
+
+  // Update panel based on current mode
+  if(G.mode==='catcher'){
+    document.getElementById('c-cur-em').textContent=info.e;
+    document.getElementById('c-cur-nm').textContent=`${info.e} ${info.zh} ${info.en}`;
+    const f=document.getElementById('c-conf');
+    f.style.width=(conf*100)+'%'; f.style.background=info.c;
+  } else if(G.mode==='mixer'){
+    document.getElementById('m-cur-em').textContent=info.e;
+    document.getElementById('m-cur-nm').textContent=`${info.e} ${info.zh} ${info.en}`;
+    const f=document.getElementById('m-conf');
+    f.style.width=(conf*100)+'%'; f.style.background=info.c;
+  } else if(G.mode==='painter'){
+    updatePainterUI(emo,info);
+    syncCursorDot();
+  }
+}
+
+function buildEBtns(cid, extra){
+  const c=document.getElementById(cid); c.innerHTML='';
+  for(const[k,info]of Object.entries(EMO)){
+    const b=document.createElement('button'); b.className='ebtn'; b.dataset.emo=k;
+    b.innerHTML=`<span class="edot" style="background:${info.c}"></span>${info.e}<span class="kbd">${info.k}</span>`;
+    b.title=`${info.zh}/${info.en} [${info.k}]`;
+    b.onclick=()=>{
+      c.querySelectorAll('.ebtn').forEach(x=>x.classList.remove('act'));
+      b.classList.add('act');
+      applyEmo(k,.92);
+      if(extra) extra(k);
+    };
+    c.appendChild(b);
+  }
+}
+
+// ══════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════
+function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
+function rnd(arr){return arr[Math.floor(Math.random()*arr.length)]}
+function goMenu(){
+  stopAll();
+  show('scr-menu');
+  const b=document.getElementById('cam-badge');
+  b.textContent=G.cameraActive?'📷 攝影機已就緒 Camera ready':'🖱️ 按鈕模式 Button mode';
+  b.style.color=G.cameraActive?'#30D158':'#FF9500';
+}
+function stopAll(){
+  clearInterval(G.cIv); clearInterval(G.mIv);
+  cancelAnimationFrame(G.cRAF); cancelAnimationFrame(G.pRAF); cancelAnimationFrame(G.mRAF);
+  stopDetect(); G.mode=null;
+}
+
+// ══════════════════════════════════════════════
+// START GAME
+// ══════════════════════════════════════════════
+async function startGame(mode){
+  stopAll();
+  if(!G.camTried && G.modelsLoaded) await tryCamera();
+  G.mode=mode;
+  if(mode==='catcher') initCatcher();
+  else if(mode==='painter') initPainter();
+  else if(mode==='mixer') initMixer();
+}
+
+// ══════════════════════════════════════════════
+// MODE 1: CATCHER
+// ══════════════════════════════════════════════
+function initCatcher(){
+  G.cs=0; G.cCombo=0; G.cMaxCombo=0; G.cCaught=0; G.cTimer=60; G.cHold=0;
+  show('scr-catcher');
+  buildEBtns('c-btns');
+  const vid=document.getElementById('catcher-vid');
+  mirrorTo(vid); if(G.cameraActive) startDetect(vid);
+  setNewTarget();
+  updateCatcherUI();
+  G.cIv=setInterval(catcherTick,1000);
+  let last=0;
+  function loop(ts){
+    if(G.mode!=='catcher') return;
+    const dt=(ts-last)/1000; last=ts;
+    if(G.curEmo===G.cTarget && G.conf>.32) G.cHold=Math.min(G.cHold+dt,0.45);
+    else G.cHold=Math.max(0,G.cHold-dt*1.0);
+    document.getElementById('c-mfill').style.width=(G.cHold/0.45*100)+'%';
+    if(G.cHold>=0.45) doCatch();
+    G.cRAF=requestAnimationFrame(loop);
+  }
+  G.cRAF=requestAnimationFrame(loop);
+}
+
+function setNewTarget(){
+  const pool=EMO_KEYS.filter(k=>k!=='neutral'&&k!==G.cTarget);
+  G.cTarget=rnd(pool); G.cHold=0;
+  const info=EMO[G.cTarget];
+  const bub=document.getElementById('c-bub');
+  bub.style.background=`radial-gradient(circle,${info.c}44,${info.c}18)`;
+  bub.style.borderColor=info.c; bub.style.color=info.c;
+  bub.style.boxShadow=`0 0 38px ${info.c}55,inset 0 0 18px ${info.c}22`;
+  document.getElementById('c-t-emo').textContent=info.e;
+  document.getElementById('c-t-zh').textContent=info.zh;
+  document.getElementById('c-t-en').textContent=info.en;
+  document.getElementById('c-mfill').style.background=info.c;
+}
+
+function doCatch(){
+  G.cCombo++; G.cCaught++;
+  if(G.cCombo>G.cMaxCombo) G.cMaxCombo=G.cCombo;
+  const pts=100+Math.max(0,G.cCombo-1)*60;
+  G.cs+=pts;
+  const info=EMO[G.cTarget];
+  flash(info.c);
+  burst(innerWidth/2,innerHeight*.45,info.c,18);
+  const msg=document.getElementById('c-cmsg');
+  msg.textContent=G.cCombo>=4?`🔥 ${G.cCombo}x 超級連擊 SUPER COMBO!`:G.cCombo>=2?`✨ ${G.cCombo}x 連擊 Combo!`:'✓ 捕捉！Got it!';
+  msg.style.animation='none'; requestAnimationFrame(()=>msg.style.animation='');
+  updateCatcherUI(); setNewTarget();
+}
+
+function catcherTick(){
+  G.cTimer--;
+  if(G.cHold<.05) G.cCombo=0;
+  if(G.cTimer<=0){clearInterval(G.cIv);stopDetect();showResults('catcher',G.cs,G.cMaxCombo,G.cCaught);return;}
+  updateCatcherUI();
+}
+
+function updateCatcherUI(){
+  document.getElementById('c-score').textContent=G.cs;
+  document.getElementById('c-timer').textContent=G.cTimer;
+  document.getElementById('c-combo').textContent=G.cCombo;
+  document.getElementById('c-tbar').style.width=(G.cTimer/60*100)+'%';
+}
+
+// ══════════════════════════════════════════════
+// MODE 2: PAINTER
+// ══════════════════════════════════════════════
+let pCtx=null;
+
+// Brush effect configs per emotion
+const BRUSH={
+  happy:    {size:22,alpha:.72,style:'star',   glow:38,trail:true,  bounce:true},
+  sad:      {size:6, alpha:.55,style:'drip',   glow:12,trail:false, bounce:false},
+  angry:    {size:30,alpha:.9, style:'splat',  glow:20,trail:false, bounce:false},
+  surprised:{size:16,alpha:.78,style:'burst',  glow:28,trail:true,  bounce:false},
+  fearful:  {size:4, alpha:.5, style:'scatter',glow:8, trail:false, bounce:false},
+  disgusted:{size:18,alpha:.65,style:'blob',   glow:14,trail:false, bounce:false},
+  neutral:  {size:8, alpha:.4, style:'smooth', glow:0, trail:false, bounce:false},
+};
+
+function initPainter(){
+  G.pPlaying=false; G.pPaused=false;
+  show('scr-painter');
+
+  const canvas=document.getElementById('painter-canvas');
+  const wrap=document.getElementById('painter-wrap');
+
+  function resizeCanvas(){
+    const tb=document.querySelector('.ptoolbar');
+    const ps=document.getElementById('p-strip');
+    const h=wrap.clientHeight||innerHeight-tb.offsetHeight-36;
+    canvas.width=wrap.clientWidth||innerWidth; canvas.height=Math.max(100,h);
+    paintBg();
+  }
+
+  pCtx=canvas.getContext('2d');
+  G.pCtx=pCtx;
+  G.pAutoX=canvas.width/2||innerWidth/2; G.pAutoY=200;
+  G.pAutoVX=2; G.pAutoVY=1.4;
+  G.pLastX=null; G.pLastY=null;
+  G.pFrame=0;
+
+  setTimeout(resizeCanvas,60);
+  window.addEventListener('resize',resizeCanvas);
+
+  // Mouse / touch
+  canvas.onmousemove=e=>{const r=canvas.getBoundingClientRect();G.pMouseX=e.clientX-r.left;G.pMouseY=e.clientY-r.top;G.pMouseOn=true;moveCursorDot(e.clientX,e.clientY)};
+  canvas.onmouseleave=()=>{G.pMouseOn=false;document.getElementById('p-cursor').style.display='none'};
+  canvas.onmouseenter=()=>{if(G.pPlaying&&!G.pPaused)document.getElementById('p-cursor').style.display='block'};
+  canvas.ontouchmove=e=>{e.preventDefault();const r=canvas.getBoundingClientRect();const t=e.touches[0];G.pMouseX=t.clientX-r.left;G.pMouseY=t.clientY-r.top;G.pMouseOn=true};
+  canvas.ontouchend=()=>G.pMouseOn=false;
+
+  // Build overlay emo pills
+  const ov=document.getElementById('p-ov-emos'); ov.innerHTML='';
+  for(const[k,info]of Object.entries(EMO)){
+    if(k==='neutral') continue;
+    const d=document.createElement('div'); d.className='p-ov-e';
+    d.style.borderColor=info.c+'55';
+    d.innerHTML=`<span class="oe">${info.e}</span><span class="on" style="color:${info.c}">${info.zh}</span><span class="oc">${info.en}</span>`;
+    ov.appendChild(d);
+  }
+
+  // Build strip
+  buildPainterStrip();
+
+  // Camera
+  const mv=document.getElementById('main-vid');
+  mirrorTo(mv); if(G.cameraActive) startDetect(mv);
+
+  updatePainterUI('neutral',EMO.neutral);
+
+  // Show start overlay
+  document.getElementById('p-overlay').classList.remove('hidden');
+  document.getElementById('p-pause').classList.remove('show');
+  document.getElementById('btn-pp').textContent='⏸ 暫停';
+  document.getElementById('btn-pp').classList.remove('playing');
+
+  // Painter RAF loop
+  let last=0;
+  function loop(ts){
+    if(G.mode!=='painter') return;
+    G.pRAF=requestAnimationFrame(loop);
+    if(!G.pPlaying||G.pPaused) return;
+    const dt=Math.min((ts-last)/1000,.05); last=ts;
+    if(!pCtx||!canvas.width) return;
+    G.pFrame++;
+
+    const emo=G.curEmo||'neutral';
+    const info=EMO[emo]||EMO.neutral;
+    const cfg=BRUSH[emo]||BRUSH.neutral;
+    const w=canvas.width, h=canvas.height;
+
+    // Brush position
+    let bx,by;
+    if(G.pMouseOn){bx=G.pMouseX;by=G.pMouseY;}
+    else{
+      // Lively auto wander – speed up with intensity
+      const speed=1.2+(G.conf||.5)*3.5;
+      G.pAutoVX+=(Math.random()-.5)*.4+(cfg.bounce?Math.sin(ts*.002)*.2:0);
+      G.pAutoVY+=(Math.random()-.5)*.4+(cfg.bounce?Math.cos(ts*.0017)*.2:0);
+      const cv=Math.hypot(G.pAutoVX,G.pAutoVY);
+      if(cv>speed){G.pAutoVX=G.pAutoVX/cv*speed;G.pAutoVY=G.pAutoVY/cv*speed;}
+      G.pAutoX+=G.pAutoVX; G.pAutoY+=G.pAutoVY;
+      const m=24;
+      if(G.pAutoX<m){G.pAutoVX=Math.abs(G.pAutoVX)+.5;}
+      if(G.pAutoX>w-m){G.pAutoVX=-(Math.abs(G.pAutoVX)+.5);}
+      if(G.pAutoY<m){G.pAutoVY=Math.abs(G.pAutoVY)+.5;}
+      if(G.pAutoY>h-m){G.pAutoVY=-(Math.abs(G.pAutoVY)+.5);}
+      bx=G.pAutoX; by=G.pAutoY;
+      moveCursorDotCanvas(bx,by,canvas);
+    }
+
+    if(G.pLastX===null){G.pLastX=bx;G.pLastY=by; return;}
+
+    const conf=G.conf||.7;
+    const base=cfg.size*(0.45+conf*.65);
+    const alpha=cfg.alpha*(0.4+conf*.65);
+    const hexA=Math.round(alpha*255).toString(16).padStart(2,'0');
+
+    // ── Main stroke ──
+    pCtx.save();
+    pCtx.lineCap='round'; pCtx.lineJoin='round';
+    pCtx.beginPath();
+    pCtx.moveTo(G.pLastX,G.pLastY);
+    pCtx.lineTo(bx,by);
+    pCtx.strokeStyle=info.c+hexA;
+    pCtx.lineWidth=base;
+    pCtx.stroke();
+    pCtx.restore();
+
+    // ── Style extras ──
+    switch(cfg.style){
+
+      case 'star': // Happy – glitter stars
+        if(cfg.glow>0){
+          const gg=pCtx.createRadialGradient(bx,by,0,bx,by,cfg.glow*(0.5+conf*.7));
+          gg.addColorStop(0,info.c+'55'); gg.addColorStop(1,'transparent');
+          pCtx.beginPath(); pCtx.arc(bx,by,cfg.glow*(0.5+conf*.7),0,Math.PI*2);
+          pCtx.fillStyle=gg; pCtx.fill();
+        }
+        if(G.pFrame%3===0){
+          for(let i=0;i<3;i++){
+            const sx=bx+(Math.random()-.5)*60, sy=by+(Math.random()-.5)*60;
+            const sr=2+Math.random()*5;
+            drawStar(pCtx,sx,sy,4,sr,sr*.4,info.c+'cc');
+          }
+        }
+        // Rainbow shimmer on stroke
+        if(G.pFrame%7===0){
+          const colors=['#FFD700','#FF9500','#FF3B30'];
+          for(const cc of colors){
+            pCtx.beginPath();pCtx.moveTo(G.pLastX,G.pLastY);pCtx.lineTo(bx,by);
+            pCtx.strokeStyle=cc+'44';pCtx.lineWidth=base*.3;pCtx.stroke();
+          }
+        }
+        break;
+
+      case 'drip': // Sad – thin line + falling drops
+        if(G.pFrame%5===0){
+          const nd=Math.floor(2+Math.random()*3);
+          for(let i=0;i<nd;i++){
+            pCtx.beginPath();
+            const dx=bx+(Math.random()-.5)*20, dy=by+5+Math.random()*40;
+            pCtx.arc(dx,dy,1+Math.random()*2,0,Math.PI*2);
+            pCtx.fillStyle=info.c+'88'; pCtx.fill();
+          }
+        }
+        // Wavy thin secondary line
+        pCtx.save(); pCtx.globalAlpha=.3;
+        pCtx.beginPath();
+        for(let t=0;t<=1;t+=.1){
+          const px2=G.pLastX+(bx-G.pLastX)*t+Math.sin(t*Math.PI*4+ts*.005)*5;
+          const py2=G.pLastY+(by-G.pLastY)*t;
+          t===0?pCtx.moveTo(px2,py2):pCtx.lineTo(px2,py2);
+        }
+        pCtx.strokeStyle=info.c; pCtx.lineWidth=1.5; pCtx.stroke();
+        pCtx.restore();
+        break;
+
+      case 'splat': // Angry – heavy splatter
+        for(let i=0;i<6;i++){
+          pCtx.beginPath();
+          const spd=20+Math.random()*50;
+          const ang=Math.random()*Math.PI*2;
+          pCtx.arc(bx+Math.cos(ang)*spd,by+Math.sin(ang)*spd, 1.5+Math.random()*5, 0, Math.PI*2);
+          pCtx.fillStyle=info.c+(Math.floor(80+Math.random()*100).toString(16));
+          pCtx.fill();
+        }
+        // Jagged secondary stroke
+        if(G.pFrame%2===0){
+          pCtx.save(); pCtx.globalAlpha=.5;
+          pCtx.beginPath();
+          for(let t=0;t<=1;t+=.08){
+            const jx=G.pLastX+(bx-G.pLastX)*t+(Math.random()-.5)*14;
+            const jy=G.pLastY+(by-G.pLastY)*t+(Math.random()-.5)*14;
+            t===0?pCtx.moveTo(jx,jy):pCtx.lineTo(jx,jy);
+          }
+          pCtx.strokeStyle=info.c; pCtx.lineWidth=base*.4; pCtx.stroke();
+          pCtx.restore();
+        }
+        break;
+
+      case 'burst': // Surprised – starburst + pops
+        if(G.pFrame%4===0){
+          const numR=5+Math.floor(Math.random()*4);
+          for(let i=0;i<numR;i++){
+            const a=(i/numR)*Math.PI*2;
+            const r=8+Math.random()*28;
+            pCtx.beginPath();
+            pCtx.moveTo(bx,by);
+            pCtx.lineTo(bx+Math.cos(a)*r,by+Math.sin(a)*r);
+            pCtx.strokeStyle=info.c+'bb'; pCtx.lineWidth=1.5+Math.random()*2.5;
+            pCtx.stroke();
+          }
+        }
+        if(cfg.glow){
+          const gg=pCtx.createRadialGradient(bx,by,0,bx,by,cfg.glow*(0.4+conf*.5));
+          gg.addColorStop(0,info.c+'44'); gg.addColorStop(1,'transparent');
+          pCtx.beginPath(); pCtx.arc(bx,by,cfg.glow*.8,0,Math.PI*2);
+          pCtx.fillStyle=gg; pCtx.fill();
+        }
+        break;
+
+      case 'scatter': // Fearful – tiny scattered dots + trembling
+        for(let i=0;i<8;i++){
+          pCtx.beginPath();
+          const r=1+Math.random()*2.5;
+          const sx=bx+(Math.random()-.5)*55, sy=by+(Math.random()-.5)*55;
+          pCtx.arc(sx,sy,r,0,Math.PI*2);
+          pCtx.fillStyle=info.c+'99'; pCtx.fill();
+        }
+        // Trembling thin zigzag
+        pCtx.save(); pCtx.globalAlpha=.45;
+        pCtx.beginPath();
+        for(let t=0;t<=1;t+=.06){
+          const zx=G.pLastX+(bx-G.pLastX)*t+(Math.random()-.5)*10;
+          const zy=G.pLastY+(by-G.pLastY)*t+(Math.random()-.5)*10;
+          t===0?pCtx.moveTo(zx,zy):pCtx.lineTo(zx,zy);
+        }
+        pCtx.strokeStyle=info.c; pCtx.lineWidth=1; pCtx.stroke();
+        pCtx.restore();
+        break;
+
+      case 'blob': // Disgusted – organic blob blobs
+        if(G.pFrame%3===0){
+          pCtx.save(); pCtx.globalAlpha=alpha*.7;
+          pCtx.beginPath();
+          pCtx.ellipse(bx+(Math.random()-.5)*20, by+(Math.random()-.5)*20,
+            base*.6*(0.5+Math.random()),base*.6*(0.5+Math.random()),
+            Math.random()*Math.PI, 0, Math.PI*2);
+          pCtx.fillStyle=info.c; pCtx.fill();
+          pCtx.restore();
+        }
+        // Drip line
+        if(G.pFrame%8===0){
+          pCtx.beginPath();
+          pCtx.arc(bx+(Math.random()-.5)*18, by+12+Math.random()*30, 2+Math.random()*4, 0, Math.PI*2);
+          pCtx.fillStyle=info.c+'bb'; pCtx.fill();
+        }
+        break;
+
+      case 'smooth':
+      default:
+        if(cfg.glow&&conf>.3){
+          const gg=pCtx.createRadialGradient(bx,by,0,bx,by,10);
+          gg.addColorStop(0,info.c+'22'); gg.addColorStop(1,'transparent');
+          pCtx.beginPath(); pCtx.arc(bx,by,10,0,Math.PI*2);
+          pCtx.fillStyle=gg; pCtx.fill();
+        }
+        break;
+    }
+
+    G.pLastX=bx; G.pLastY=by;
+  }
+  G.pRAF=requestAnimationFrame(loop);
+}
+
+function drawStar(ctx,cx,cy,spikes,outerR,innerR,color){
+  ctx.save(); ctx.beginPath();
+  let rot=Math.PI/2*3, x=cx, y=cy, step=Math.PI/spikes;
+  ctx.moveTo(cx,cy-outerR);
+  for(let i=0;i<spikes;i++){
+    x=cx+Math.cos(rot)*outerR; y=cy+Math.sin(rot)*outerR; ctx.lineTo(x,y); rot+=step;
+    x=cx+Math.cos(rot)*innerR; y=cy+Math.sin(rot)*innerR; ctx.lineTo(x,y); rot+=step;
+  }
+  ctx.lineTo(cx,cy-outerR); ctx.closePath();
+  ctx.fillStyle=color; ctx.fill(); ctx.restore();
+}
+
+function paintBg(){
+  if(!pCtx) return;
+  const canvas=document.getElementById('painter-canvas');
+  const patternsNight={
+    happy:   ['#1e1400','#14100a'],
+    sad:     ['#0a0e1e','#06091a'],
+    angry:   ['#1e0808','#120404'],
+    surprised:['#1a100e','#0e0808'],
+    fearful: ['#120a1e','#0a0614'],
+    disgusted:['#0a1408','#060e04'],
+    neutral: ['#18102e','#08071a'],
+  };
+  const patternsDay={
+    happy:   ['#fff8e0','#ffedb0'],
+    sad:     ['#d8eaf8','#c0d8f0'],
+    angry:   ['#fde0df','#f8c8c5'],
+    surprised:['#feecd8','#fcd8b0'],
+    fearful: ['#ede0fa','#ddc8f4'],
+    disgusted:['#dff0df','#c8e8c8'],
+    neutral: ['#e8edf2','#d8e4ec'],
+  };
+  const patterns=isDark?patternsNight:patternsDay;
+  const cols=patterns[G.curEmo]||patterns.neutral;
+  const g=pCtx.createRadialGradient(canvas.width/2,canvas.height/2,0,canvas.width/2,canvas.height/2,Math.max(canvas.width,canvas.height)*.85);
+  g.addColorStop(0,cols[0]); g.addColorStop(1,cols[1]);
+  pCtx.fillStyle=g; pCtx.fillRect(0,0,canvas.width,canvas.height);
+  G.pLastX=null; G.pLastY=null;
+}
+
+function moveCursorDot(cx,cy){
+  const dot=document.getElementById('p-cursor');
+  const wrap=document.getElementById('painter-wrap');
+  if(!wrap||!G.pPlaying||G.pPaused){dot.style.display='none';return;}
+  const r=wrap.getBoundingClientRect();
+  dot.style.display='block';
+  dot.style.left=(cx-r.left)+'px'; dot.style.top=(cy-r.top)+'px';
+  syncCursorDot();
+}
+
+function moveCursorDotCanvas(bx,by,canvas){
+  const dot=document.getElementById('p-cursor');
+  if(!G.pPlaying||G.pPaused){dot.style.display='none';return;}
+  dot.style.display='block';
+  dot.style.left=bx+'px'; dot.style.top=by+'px';
+  syncCursorDot();
+}
+
+function syncCursorDot(){
+  const dot=document.getElementById('p-cursor');
+  const info=EMO[G.curEmo]||EMO.neutral;
+  const s=10+G.conf*14;
+  dot.style.width=s+'px'; dot.style.height=s+'px';
+  dot.style.background=info.c;
+  dot.style.boxShadow=`0 0 ${8+G.conf*18}px ${info.c},0 0 ${16+G.conf*30}px ${info.c}55`;
+}
+
+function startPainting(){
+  G.pPlaying=true; G.pPaused=false;
+  document.getElementById('p-overlay').classList.add('hidden');
+  document.getElementById('p-pause').classList.remove('show');
+  document.getElementById('btn-pp').textContent='⏸ 暫停';
+  document.getElementById('btn-pp').classList.remove('playing');
+  G.pLastX=null; G.pLastY=null;
+  paintBg();
+}
+
+function togglePause(){
+  if(!G.pPlaying) return;
+  G.pPaused=!G.pPaused;
+  const btn=document.getElementById('btn-pp');
+  const po=document.getElementById('p-pause');
+  if(G.pPaused){
+    btn.textContent='▶ 繼續'; btn.classList.add('playing');
+    po.classList.add('show');
+    document.getElementById('p-cursor').style.display='none';
+  } else {
+    btn.textContent='⏸ 暫停'; btn.classList.remove('playing');
+    po.classList.remove('show');
+    G.pLastX=null; G.pLastY=null;
+  }
+}
+
+// Space bar also toggles pause in painter
+document.addEventListener('keydown',e=>{
+  if(e.code==='Space'&&G.mode==='painter'){e.preventDefault();togglePause();}
+});
+
+function buildPainterStrip(){
+  const strip=document.getElementById('p-strip'); strip.innerHTML='';
+  for(const[k,info]of Object.entries(EMO)){
+    const d=document.createElement('div'); d.className='pek'; d.dataset.emo=k;
+    d.style.setProperty('--ec',info.c);
+    d.innerHTML=`<span class="pe-em">${info.e}</span><span style="color:${info.c};font-size:9px">${info.zh}</span><span class="pe-kbd">${info.k}</span>`;
+    d.onclick=()=>{
+      applyEmo(k,.9);
+      strip.querySelectorAll('.pek').forEach(x=>x.classList.remove('act'));
+      d.classList.add('act');
+      if(G.pPlaying&&!G.pPaused) paintBg();
+    };
+    strip.appendChild(d);
+  }
+}
+
+function updatePainterUI(emo,info){
+  const dot=document.getElementById('p-dot');
+  const lbl=document.getElementById('p-label');
+  if(dot){dot.style.background=info.c; dot.style.boxShadow=`0 0 10px ${info.c}88`;}
+  if(lbl) lbl.textContent=`${info.e} ${info.zh} ${info.en}`;
+  const strip=document.getElementById('p-strip');
+  if(strip) strip.querySelectorAll('.pek').forEach(d=>d.classList.toggle('act',d.dataset.emo===emo));
+}
+
+function clearPainter(){
+  paintBg();
+}
+
+function savePainting(){
+  const canvas=document.getElementById('painter-canvas'); if(!canvas) return;
+  const a=document.createElement('a'); a.download='emotion-art.png'; a.href=canvas.toDataURL(); a.click();
+}
+
+// ══════════════════════════════════════════════
+// MODE 3: MIXER
+// ══════════════════════════════════════════════
+function initMixer(){
+  G.ms=0; G.mLevel=1; G.mTimer=60; G.mStep=0; G.mHold=0;
+  show('scr-mixer');
+  buildEBtns('m-btns');
+  const vid=document.getElementById('mixer-vid');
+  mirrorTo(vid); if(G.cameraActive) startDetect(vid);
+  setNewMix();
+  updateMixerUI();
+  G.mIv=setInterval(mixerTick,1000);
+
+  let last=0;
+  function loop(ts){
+    if(G.mode!=='mixer') return;
+    const dt=(ts-last)/1000; last=ts;
+    if(!G.mMix) return G.mRAF=requestAnimationFrame(loop);
+    const tgt=G.mStep===0?G.mMix.a:G.mMix.b;
+    if(G.curEmo===tgt&&G.conf>.30) G.mHold=Math.min(G.mHold+dt,0.40);
+    else G.mHold=Math.max(0,G.mHold-dt*0.9);
+    if(G.mHold>=0.40) completeMixStep();
+    G.mRAF=requestAnimationFrame(loop);
+  }
+  G.mRAF=requestAnimationFrame(loop);
+}
+
+function setNewMix(){
+  G.mMix=rnd(MIXES); G.mStep=0; G.mHold=0;
+  const c=document.getElementById('m-circle');
+  c.style.background=G.mMix.r;
+  c.style.boxShadow=`0 0 42px ${G.mMix.r}88`;
+  document.getElementById('m-tname').textContent=`${G.mMix.zh} · ${G.mMix.en}`;
+  // Reset step UI
+  const s1=document.getElementById('ms1'), s2=document.getElementById('ms2');
+  s1.className='mstep act'; s2.className='mstep';
+  const c1=document.getElementById('ms1c'), c2=document.getElementById('ms2c');
+  c1.textContent='❓'; c1.style.cssText='';
+  c2.textContent='❓'; c2.style.cssText='';
+  const rb=document.getElementById('m-rbub');
+  rb.textContent='🎨'; rb.className='mix-result-bub'; rb.style.cssText='';
+}
+
+function completeMixStep(){
+  G.mHold=0;
+  const emo=G.mStep===0?G.mMix.a:G.mMix.b;
+  const info=EMO[emo];
+
+  if(G.mStep===0){
+    const s1=document.getElementById('ms1');
+    s1.className='mstep done';
+    const c1=document.getElementById('ms1c');
+    c1.textContent=info.e; c1.style.background=info.c+'30'; c1.style.borderColor=info.c;
+    document.getElementById('ms2').className='mstep act';
+    G.mStep=1;
+    flash(info.c);
+    burst(innerWidth*.38,innerHeight*.5,info.c,10);
+  } else {
+    const s2=document.getElementById('ms2');
+    s2.className='mstep done';
+    const c2=document.getElementById('ms2c');
+    c2.textContent=info.e; c2.style.background=info.c+'30'; c2.style.borderColor=info.c;
+    // Win!
+    const rb=document.getElementById('m-rbub');
+    rb.textContent='✓'; rb.className='mix-result-bub ready';
+    rb.style.background=G.mMix.r; rb.style.borderColor=G.mMix.r;
+    flash(G.mMix.r);
+    burst(innerWidth/2,innerHeight*.5,G.mMix.r,24);
+    G.ms+=200+G.mLevel*60; G.mLevel++;
+    document.getElementById('m-score').textContent=G.ms;
+    document.getElementById('m-level').textContent=G.mLevel;
+    setTimeout(()=>{if(G.mode==='mixer') setNewMix();},900);
+  }
+}
+
+function mixerTick(){
+  G.mTimer--;
+  if(G.mTimer<=0){clearInterval(G.mIv);stopDetect();showResults('mixer',G.ms,G.mLevel-1,G.mLevel-1);return;}
+  updateMixerUI();
+}
+
+function updateMixerUI(){
+  document.getElementById('m-score').textContent=G.ms;
+  document.getElementById('m-timer').textContent=G.mTimer;
+  document.getElementById('m-level').textContent=G.mLevel;
+  document.getElementById('m-tbar').style.width=(G.mTimer/60*100)+'%';
+}
+
+// ══════════════════════════════════════════════
+// RESULTS
+// ══════════════════════════════════════════════
+function showResults(mode,score,combo,done){
+  G.mode=null; stopDetect();
+  show('scr-results');
+  const names={catcher:'🎨 顏色捕手 · Color Catcher',painter:'🖼️ 情緒畫家 · Emotion Painter',mixer:'🧪 調色師對決 · Color Mix Challenge'};
+  document.getElementById('r-mode').textContent=names[mode]||mode;
+  document.getElementById('r-score').textContent=score;
+  document.getElementById('r-combo').textContent=combo;
+  document.getElementById('r-done').textContent=done;
+  const se=document.getElementById('r-score');
+  se.style.color=score>=800?'#FFD700':score>=400?'#BF5AF2':'#5B9BFF';
+  document.getElementById('r-again').dataset.mode=mode;
+  setTimeout(()=>{
+    ['#FFD700','#FF3B30','#BF5AF2','#30D158','#5B9BFF','#FF9500'].forEach((c,i)=>
+      setTimeout(()=>burst(innerWidth*(0.15+i*.14),innerHeight*.25,c,10),i*90));
+  },300);
+}
+
+function playAgain(){
+  const mode=document.getElementById('r-again').dataset.mode;
+  if(mode) startGame(mode); else goMenu();
+}
+
+// ══════════════════════════════════════════════
+// KEYBOARD SHORTCUTS
+// ══════════════════════════════════════════════
+document.addEventListener('keydown',e=>{
+  if(G.mode!=='catcher'&&G.mode!=='mixer') return;
+  const key=e.key.toUpperCase();
+  for(const[emo,info]of Object.entries(EMO)){
+    if(key===info.k){
+      applyEmo(emo,.92);
+      const cid=G.mode==='catcher'?'c-btns':'m-btns';
+      const c=document.getElementById(cid);
+      if(c){c.querySelectorAll('.ebtn').forEach(b=>b.classList.remove('act'));
+        const btn=c.querySelector(`[data-emo="${emo}"]`);if(btn)btn.classList.add('act');}
+      break;
+    }
+  }
+});
+
+// ══════════════════════════════════════════════
+// BOOT
+// ══════════════════════════════════════════════
+document.getElementById('btn-skip').onclick=()=>{G.camTried=true; goMenu();};
+
+window.addEventListener('load',()=>{
+  if(typeof faceapi!=='undefined') loadModels();
+  else{
+    document.getElementById('load-status').textContent='⚠️ 使用按鈕模式 Button mode';
+    setTimeout(goMenu,1500);
+  }
+});
+</script>
+</body>
+</html>
