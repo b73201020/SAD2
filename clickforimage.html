@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Click for image</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/1.20.3/TweenLite.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/1.20.3/easing/EasePack.min.js"></script>
+
+    <style>
+        body {
+            background-color: #272B33;
+            margin: 0;
+            padding: 60px 0;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            cursor: pointer;
+        }
+
+        #canvas-image {
+            width: 205px;
+            height: 385px;
+            z-index: 0;
+        }
+
+        #canvas-shapes {
+            z-index: 10;
+            background-color: #272B33;
+        }
+
+        p {
+            color: #8F9EBB;
+            display: block;
+            font-size: 20px;
+            position: absolute;
+            z-index: 20;
+            font-family: arial;
+            top: 30px;
+            left: 30px;
+        }
+
+        #upload-area {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 30;
+            text-align: center;
+        }
+
+        #upload-label {
+            display: inline-block;
+            padding: 10px 24px;
+            background-color: #3D4452;
+            color: #8F9EBB;
+            font-family: arial;
+            font-size: 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            border: 1px solid #5A6478;
+            transition: background-color 0.2s;
+        }
+
+        #upload-label:hover {
+            background-color: #4A5568;
+        }
+
+        #file-input {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <p>Click to form an image</p>
+    <canvas id="canvas-image"></canvas>
+    <canvas id="canvas-shapes"></canvas>
+    <div id="upload-area">
+        <label id="upload-label" for="file-input">上傳圖片</label>
+        <input type="file" id="file-input" accept="image/*">
+    </div>
+    <script>
+        /*
+        Desc: Define initial variables
+        */
+        var numberStage,
+                stageImageCtx,
+                stageImageWidth = 500,
+                stageImageHeight = 500,
+                stageImageOffsetX,
+                stageImageOffsetY,
+
+                stage,
+                stageCtx,
+                stageWidth = window.innerWidth,
+                stageHeight = window.innerHeight,
+                stageCenterX = stageWidth / 2,
+                stageCenterY = stageHeight / 2,
+
+                circleOuterRadius = 360,
+                circlePoints = [],
+
+                imageVisible = false,
+                dots = [],
+                imagePixelCoordinates,
+                circleRadius = 2;
+
+        /*
+        Desc: Init canvases
+        */
+        function init() {
+
+                stageImage = document.getElementById("canvas-image");
+                stageImageCtx = stageImage.getContext('2d');
+                stageImage.width = stageImageWidth;
+                stageImage.height = stageImageHeight;
+
+                stage = document.getElementById("canvas-shapes");
+                stageCtx = stage.getContext('2d');
+                stage.width = stageWidth;
+                stage.height = stageHeight;
+
+                stageImageOffsetX = (stageWidth - stageImageWidth) / 2;
+                stageImageOffsetY = (stageHeight - stageImageHeight) / 2;
+        }
+
+        init();
+
+        /*
+        Desc: Switch between circle and image
+        */
+        stage.addEventListener('click', function() {
+                imageVisible = !imageVisible;
+        }, false);
+
+        /*
+        Desc: Dot object
+        */
+        function Dot(x, y, red, blue, green, imageX, imageY) {
+
+                var _this = this;
+
+                _this.x = x;
+                _this.y = y;
+                _this.red = red;
+                _this.green = blue;
+                _this.blue = green;
+                _this.imageX = imageX;
+                _this.imageY = imageY;
+
+                this.draw = function() {
+                        stageCtx.beginPath();
+                        stageCtx.arc(_this.x, _this.y, circleRadius, 0, 2 * Math.PI, false);
+                        stageCtx.fillStyle = 'rgb(' + _this.red + ', ' + _this.green + ', ' + _this.blue + ')';
+                        stageCtx.fill();
+                }
+
+        }
+
+        /*
+        Desc: Redraw loops
+        */
+        function loop() {
+
+                stageCtx.clearRect(0, 0, stageWidth, stageHeight);
+
+                for (var i = 0; i < dots.length; i++) {
+                        dots[i].draw(stageCtx);
+                }
+
+                requestAnimationFrame(loop);
+
+        }
+        loop();
+
+        /*
+        Desc: Apply image — update dimensions, radius, offsets, then start animation
+        */
+        function applyImage(img) {
+                stageImageWidth  = img.naturalWidth;
+                stageImageHeight = img.naturalHeight;
+
+                stageImage.width  = stageImageWidth;
+                stageImage.height = stageImageHeight;
+
+                circleOuterRadius = Math.max(stageImageWidth, stageImageHeight) / 2;
+
+                stageImageOffsetX = (stageWidth  - stageImageWidth)  / 2;
+                stageImageOffsetY = (stageHeight - stageImageHeight) / 2;
+
+                stageImageCtx.clearRect(0, 0, stageImageWidth, stageImageHeight);
+                stageImageCtx.drawImage(img, 0, 0);
+
+                dots = [];
+                circlePoints = [];
+                imageVisible = false;
+
+                getImageData();
+        }
+
+        /*
+        Desc: Draw Image
+        */
+        drawImage();
+
+        function drawImage() {
+                var img = new Image;
+                img.crossOrigin = "Anonymous";
+                img.src = 'jsyeh500x500.png';
+                img.onload = function() {
+                        applyImage(img);
+                };
+        }
+
+        /*
+        Desc: Get image data
+        */
+        function getImageData() {
+
+                var ctx = document.getElementById('canvas-image').getContext('2d');
+
+                var imageData = ctx.getImageData(0, 0, stageImageWidth, stageImageHeight).data;
+
+                imagePixelCoordinates = [];
+
+                for (var i = imageData.length; i >= 0; i -= 4) {
+
+                        if (imageData[i] !== 0) {
+
+                                var x = (i / 4) % stageImageWidth;
+                                var y = Math.floor(Math.floor(i / stageImageWidth) / 4);
+
+                                if ((x && x % ((circleRadius * 2) + 1) == 0) && (y && y % ((circleRadius * 2) + 1) == 0)) {
+
+                                        imagePixelCoordinates.push({
+                                                x: x,
+                                                y: y,
+                                                red: imageData[i],
+                                                green: imageData[i + 1],
+                                                blue: imageData[i + 2]
+                                        });
+
+                                }
+
+                        }
+                }
+
+                formImage();
+
+        }
+
+        /*
+        Desc: From image using dots
+        */
+        function formImage() {
+
+                for (var i = 0; i < imagePixelCoordinates.length; i++) {
+
+                        // Create a list of coordinates that represent a circle
+                        var p = Math.random(),
+                                x = stageCenterX + circleOuterRadius * Math.cos(2 * Math.PI * p),
+                                y = stageCenterY + circleOuterRadius * Math.sin(2 * Math.PI * p);
+
+                        circlePoints.push({
+                                x: x,
+                                y: y
+                        });
+                    
+                    
+                        // Create dots
+                        var dot = new Dot(
+                                x,
+                                y,
+                                imagePixelCoordinates[i].red,
+                                imagePixelCoordinates[i].green,
+                                imagePixelCoordinates[i].blue,
+                                imagePixelCoordinates[i].x,
+                                imagePixelCoordinates[i].y
+                        );
+
+                        dots.push(dot);
+
+                        // Tween dots 
+                        tweenDots(dots[i], circlePoints[i], 'circle');
+
+                }
+
+        }
+
+        /*
+        Desc: Animate dots
+        */
+        function tweenDots(dot, circlePos, type) {
+
+                if (type === 'circle') {
+
+                        // Tween dot to coordinate to form image
+                        TweenLite.to(dot, (1.8 + Math.round(Math.random() * 100) / 100), {
+                                x: circlePos.x,
+                                y: circlePos.y,
+                                ease: Cubic.easeInOut,
+                                onComplete: function() {
+
+                                        if (!imageVisible) {
+                                                tweenDots(dot, circlePoints[randomNumber(0, circlePoints.length)], 'circle');
+                                        } else {
+                                                tweenDots(dot, '', '');
+                                        }
+
+                                }
+                        });
+
+                } else {
+
+                        // Tween dot to coordinate to form image
+                        TweenLite.to(dot, (0.4 + Math.round(Math.random() * 100) / 100), {
+                                x: (dot.imageX + stageImageOffsetX),
+                                y: (dot.imageY + stageImageOffsetY),
+                                ease: Cubic.easeInOut,
+                                onComplete: function() {
+
+                                        if (!imageVisible) {
+                                                tweenDots(dot, circlePoints[randomNumber(0, circlePoints.length)], 'circle');
+                                        } else {
+                                                tweenDots(dot, '', '');
+                                        }
+
+                                }
+                        });
+
+                }
+
+        }
+
+        /*
+        Desc: Get a random number
+        */
+        function randomNumber(min, max) {
+                return Math.floor(Math.random() * (max - min) + min);
+        }
+
+        /*
+        Desc: Handle user image upload
+        */
+        document.getElementById('file-input').addEventListener('change', function(e) {
+                var file = e.target.files[0];
+                if (!file) return;
+
+                var reader = new FileReader();
+                reader.onload = function(event) {
+                        var img = new Image();
+                        img.onload = function() {
+                                applyImage(img);
+                        };
+                        img.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+                // 清空 input 讓同一張圖可重複上傳
+                this.value = '';
+        });
+    </script>
+</body>
+</html>
