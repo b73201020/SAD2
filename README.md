@@ -10,3 +10,4 @@
 - [2026 WBC冠軍預測](OK_2026WBC.html)
 - [情緒調色盤](emotion-palette_5.html)
 - [情緒調色盤 v7](emotion-palette_7.html)
+- [Click for Image](clickforimage.html)
