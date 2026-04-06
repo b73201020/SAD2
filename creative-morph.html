@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>粒子變形 · Creative Morph</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/1.20.3/TweenLite.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/1.20.3/easing/EasePack.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: #080B10;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        #canvas-image { display: none; }
+
+        #canvas-shapes {
+            z-index: 10;
+            cursor: pointer;
+        }
+
+        #hint {
+            position: fixed;
+            top: 22px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 30;
+            color: rgba(139, 148, 158, 0.45);
+            font-size: 13px;
+            letter-spacing: 0.06em;
+            pointer-events: none;
+        }
+
+        #ui {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 30;
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            background: rgba(8, 11, 16, 0.88);
+            padding: 10px 12px;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            backdrop-filter: blur(16px);
+        }
+
+        .mode-btn {
+            padding: 7px 13px;
+            background: transparent;
+            color: #525A65;
+            font-size: 12px;
+            font-family: inherit;
+            border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: color 0.2s, background 0.2s, border-color 0.2s;
+            white-space: nowrap;
+            letter-spacing: 0.03em;
+        }
+
+        .mode-btn:hover {
+            background: rgba(255,255,255,0.06);
+            color: #BDC5CF;
+            border-color: rgba(255,255,255,0.13);
+        }
+
+        .mode-btn.active {
+            background: rgba(56, 139, 253, 0.1);
+            border-color: rgba(56, 139, 253, 0.35);
+            color: #58A6FF;
+        }
+
+        .sep {
+            width: 1px;
+            height: 20px;
+            background: rgba(255,255,255,0.07);
+            flex-shrink: 0;
+        }
+
+        #upload-label {
+            padding: 7px 13px;
+            background: transparent;
+            color: #525A65;
+            font-size: 12px;
+            font-family: inherit;
+            border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: color 0.2s, background 0.2s;
+            letter-spacing: 0.03em;
+        }
+
+        #upload-label:hover {
+            background: rgba(255,255,255,0.06);
+            color: #BDC5CF;
+        }
+
+        #file-input { display: none; }
+    </style>
+</head>
+<body>
+    <div id="hint">點擊畫面以切換形態 · 選擇下方模式</div>
+    <canvas id="canvas-image"></canvas>
+    <canvas id="canvas-shapes"></canvas>
+
+    <div id="ui">
+        <button class="mode-btn active" data-mode="ring">⊙ 圓環</button>
+        <button class="mode-btn" data-mode="spiral">◎ 螺旋</button>
+        <button class="mode-btn" data-mode="helix">⋈ 雙螺旋</button>
+        <button class="mode-btn" data-mode="lissajous">∞ 李沙育</button>
+        <button class="mode-btn" data-mode="sunflower">✿ 葵花</button>
+        <button class="mode-btn" data-mode="grid">⊞ 網格</button>
+        <div class="sep"></div>
+        <label id="upload-label" for="file-input">↑ 上傳圖片</label>
+        <input type="file" id="file-input" accept="image/*">
+    </div>
+
+    <script>
+        // ── State ────────────────────────────────────────────────────────
+        var stageImage, stageImageCtx,
+            stageImageWidth, stageImageHeight,
+            stageImageOffsetX, stageImageOffsetY,
+            stage, stageCtx,
+            stageWidth  = window.innerWidth,
+            stageHeight = window.innerHeight,
+            stageCenterX = stageWidth  / 2,
+            stageCenterY = stageHeight / 2,
+            imageVisible = false,
+            dots = [],
+            imagePixelCoordinates = [],
+            dotRadius = 2,
+            currentMode = 'ring',
+            mouseX = -9999, mouseY = -9999,
+            mouseDX = 0,    mouseDY = 0;
+
+        // ── Canvas init ──────────────────────────────────────────────────
+        stageImage    = document.getElementById('canvas-image');
+        stageImageCtx = stageImage.getContext('2d');
+
+        stage    = document.getElementById('canvas-shapes');
+        stageCtx = stage.getContext('2d');
+        stage.width  = stageWidth;
+        stage.height = stageHeight;
+
+        // ── Dot ──────────────────────────────────────────────────────────
+        function Dot(x, y, r, g, b, imgX, imgY) {
+            this.x  = x;   this.y  = y;
+            this.r  = r;   this.g  = g;   this.b = b;
+            this.imgX = imgX;
+            this.imgY = imgY;
+            this.scatterX = x;
+            this.scatterY = y;
+            this.tweenId  = 0;
+            this.mx = 0;  // mouse influence offset x
+            this.my = 0;  // mouse influence offset y
+        }
+
+        Dot.prototype.draw = function() {
+            stageCtx.beginPath();
+            stageCtx.arc(this.x + this.mx, this.y + this.my, dotRadius, 0, Math.PI * 2);
+            stageCtx.fillStyle = 'rgb(' + this.r + ',' + this.g + ',' + this.b + ')';
+            stageCtx.fill();
+        };
+
+        // ── Mouse influence ──────────────────────────────────────────────
+        // Particles are repelled from the cursor; stronger when mouse moves fast.
+        // mx/my are offsets on top of GSAP-controlled x/y — no tween interference.
+        var REPEL_RADIUS   = 110;
+        var REPEL_STRENGTH = 55;
+        var DAMPING        = 0.87;
+
+        function updateMouseEffect() {
+            var speed = Math.sqrt(mouseDX * mouseDX + mouseDY * mouseDY);
+            var boost = 1 + Math.min(speed / 12, 2.5); // up to 3.5× when swiping fast
+            for (var i = 0; i < dots.length; i++) {
+                var d  = dots[i];
+                // spring back toward 0
+                d.mx *= DAMPING;
+                d.my *= DAMPING;
+                // distance from rendered position to cursor
+                var dx   = (d.x + d.mx) - mouseX;
+                var dy   = (d.y + d.my) - mouseY;
+                var dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < REPEL_RADIUS && dist > 0.5) {
+                    var force = (1 - dist / REPEL_RADIUS) * REPEL_STRENGTH * boost;
+                    d.mx += (dx / dist) * force;
+                    d.my += (dy / dist) * force;
+                }
+            }
+            // decay mouse velocity
+            mouseDX *= 0.75;
+            mouseDY *= 0.75;
+        }
+
+        stage.addEventListener('mousemove', function(e) {
+            mouseDX = e.clientX - mouseX;
+            mouseDY = e.clientY - mouseY;
+            mouseX  = e.clientX;
+            mouseY  = e.clientY;
+        });
+
+        stage.addEventListener('mouseleave', function() {
+            mouseX = -9999;
+            mouseY = -9999;
+        });
+
+        // ── Render loop ──────────────────────────────────────────────────
+        (function loop() {
+            stageCtx.clearRect(0, 0, stageWidth, stageHeight);
+            updateMouseEffect();
+            for (var i = 0; i < dots.length; i++) dots[i].draw();
+            requestAnimationFrame(loop);
+        }());
+
+        // ── Scatter formations ───────────────────────────────────────────
+        // Each returns {x, y} for dot index i out of total.
+
+        var formations = {
+
+            // Single ring
+            ring: function(i, total) {
+                var r = Math.min(stageWidth, stageHeight) * 0.38;
+                var t = i / total;
+                return {
+                    x: stageCenterX + r * Math.cos(t * Math.PI * 2),
+                    y: stageCenterY + r * Math.sin(t * Math.PI * 2)
+                };
+            },
+
+            // Archimedean spiral (7 turns, fills screen)
+            spiral: function(i, total) {
+                var t     = i / total;
+                var turns = 7;
+                var angle = t * turns * Math.PI * 2;
+                var r     = t * Math.min(stageWidth, stageHeight) * 0.43;
+                return {
+                    x: stageCenterX + r * Math.cos(angle),
+                    y: stageCenterY + r * Math.sin(angle)
+                };
+            },
+
+            // DNA double helix — first half / second half on each strand
+            helix: function(i, total) {
+                var half   = Math.floor(total / 2);
+                var strand = i < half ? 0 : 1;
+                var p      = strand === 0 ? i / half : (i - half) / half;
+                var w      = stageWidth * 0.72;
+                var amp    = stageHeight * 0.22;
+                var phase  = strand === 0 ? 0 : Math.PI;
+                return {
+                    x: stageCenterX - w / 2 + p * w,
+                    y: stageCenterY + amp * Math.sin(p * 4 * Math.PI * 2 + phase)
+                };
+            },
+
+            // Lissajous 3:2 with δ = π/2
+            lissajous: function(i, total) {
+                var t  = (i / total) * Math.PI * 2;
+                var rx = stageWidth  * 0.38;
+                var ry = stageHeight * 0.36;
+                return {
+                    x: stageCenterX + rx * Math.cos(3 * t),
+                    y: stageCenterY + ry * Math.sin(2 * t)
+                };
+            },
+
+            // Phyllotaxis (sunflower golden-angle spiral)
+            sunflower: function(i, total) {
+                var goldenAngle = 137.508 * (Math.PI / 180);
+                var angle = i * goldenAngle;
+                var r     = Math.sqrt(i / total) * Math.min(stageWidth, stageHeight) * 0.43;
+                return {
+                    x: stageCenterX + r * Math.cos(angle),
+                    y: stageCenterY + r * Math.sin(angle)
+                };
+            },
+
+            // Screen-filling grid with correct aspect ratio
+            grid: function(i, total) {
+                var aspect = stageWidth / stageHeight;
+                var cols   = Math.ceil(Math.sqrt(total * aspect));
+                var rows   = Math.ceil(total / cols);
+                var col    = i % cols;
+                var row    = Math.floor(i / cols);
+                var padX   = stageWidth  * 0.05;
+                var padY   = stageHeight * 0.07;
+                var cellW  = (stageWidth  - padX * 2) / cols;
+                var cellH  = (stageHeight - padY * 2) / rows;
+                return {
+                    x: padX + col * cellW + cellW / 2,
+                    y: padY + row * cellH + cellH / 2
+                };
+            }
+        };
+
+        // ── Image pipeline ───────────────────────────────────────────────
+
+        function applyImage(img) {
+            stageImageWidth  = img.naturalWidth  || img.width;
+            stageImageHeight = img.naturalHeight || img.height;
+
+            stageImage.width  = stageImageWidth;
+            stageImage.height = stageImageHeight;
+            stageImageCtx.clearRect(0, 0, stageImageWidth, stageImageHeight);
+            stageImageCtx.drawImage(img, 0, 0);
+
+            stageImageOffsetX = (stageWidth  - stageImageWidth)  / 2;
+            stageImageOffsetY = (stageHeight - stageImageHeight) / 2;
+
+            for (var i = 0; i < dots.length; i++) TweenLite.killTweensOf(dots[i]);
+            dots = [];
+            imageVisible = false;
+
+            samplePixels();
+            buildDots();
+        }
+
+        function samplePixels() {
+            var data = stageImageCtx.getImageData(0, 0, stageImageWidth, stageImageHeight).data;
+            // Scale particle count with image area: small ~6000, large up to ~20000
+            var area       = stageImageWidth * stageImageHeight;
+            var targetDots = Math.min(20000, Math.max(6000, Math.round(area / 60)));
+            var step       = Math.max(3, Math.ceil(Math.sqrt(area / targetDots)));
+            imagePixelCoordinates = [];
+
+            for (var y = 0; y < stageImageHeight; y += step) {
+                for (var x = 0; x < stageImageWidth; x += step) {
+                    var idx = (y * stageImageWidth + x) * 4;
+                    if (data[idx + 3] > 20) {   // alpha channel check
+                        imagePixelCoordinates.push({
+                            x: x, y: y,
+                            r: data[idx],
+                            g: data[idx + 1],
+                            b: data[idx + 2]
+                        });
+                    }
+                }
+            }
+        }
+
+        function buildDots() {
+            var total  = imagePixelCoordinates.length;
+            var formFn = formations[currentMode];
+
+            for (var i = 0; i < total; i++) {
+                var s  = formFn(i, total);
+                var px = imagePixelCoordinates[i];
+                var d  = new Dot(
+                    s.x, s.y,
+                    px.r, px.g, px.b,
+                    px.x + stageImageOffsetX,
+                    px.y + stageImageOffsetY
+                );
+                d.scatterX = s.x;
+                d.scatterY = s.y;
+                dots.push(d);
+
+                // Stagger the entrance (dots fly in from scatter position)
+                (function(dot) {
+                    dot.tweenId++;
+                    var id = dot.tweenId;
+                    setTimeout(function() {
+                        if (!imageVisible) startFloat(dot, id);
+                    }, Math.random() * 800);
+                }(d));
+            }
+        }
+
+        // ── Tweens ───────────────────────────────────────────────────────
+
+        // Reveal: radial delay — center dots appear first
+        function revealDelay(dot) {
+            var dx = dot.imgX - stageCenterX;
+            var dy = dot.imgY - stageCenterY;
+            return Math.sqrt(dx * dx + dy * dy) / (Math.min(stageWidth, stageHeight) * 0.5) * 0.45;
+        }
+
+        function tweenToImage(dot, delay) {
+            dot.tweenId++;
+            TweenLite.killTweensOf(dot);
+            TweenLite.to(dot, 0.45 + Math.random() * 0.45, {
+                x: dot.imgX,
+                y: dot.imgY,
+                ease: Expo.easeOut,
+                delay: delay
+            });
+        }
+
+        function tweenToScatter(dot, delay) {
+            dot.tweenId++;
+            var id = dot.tweenId;
+            TweenLite.killTweensOf(dot);
+            TweenLite.to(dot, 0.7 + Math.random() * 0.6, {
+                x: dot.scatterX,
+                y: dot.scatterY,
+                ease: Cubic.easeInOut,
+                delay: delay,
+                onComplete: function() {
+                    if (!imageVisible && dot.tweenId === id) startFloat(dot, id);
+                }
+            });
+        }
+
+        // Gentle idle float — each dot breathes slightly around its scatter position.
+        // tweenId prevents ghost callbacks from old tween chains.
+        function startFloat(dot, id) {
+            if (imageVisible || dot.tweenId !== id) return;
+            var drift = 10 + Math.random() * 18;
+            TweenLite.to(dot, 1.6 + Math.random() * 2.4, {
+                x: dot.scatterX + (Math.random() - 0.5) * drift,
+                y: dot.scatterY + (Math.random() - 0.5) * drift,
+                ease: Sine.easeInOut,
+                onComplete: function() { startFloat(dot, id); }
+            });
+        }
+
+        // ── Canvas click — toggle image ──────────────────────────────────
+        stage.addEventListener('click', function() {
+            if (dots.length === 0) return;
+            imageVisible = !imageVisible;
+
+            for (var i = 0; i < dots.length; i++) {
+                var dot = dots[i];
+                if (imageVisible) {
+                    tweenToImage(dot, revealDelay(dot));
+                } else {
+                    tweenToScatter(dot, Math.random() * 0.35);
+                }
+            }
+        });
+
+        // ── Mode buttons ─────────────────────────────────────────────────
+        document.querySelectorAll('.mode-btn').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var mode = this.dataset.mode;
+                if (mode === currentMode || dots.length === 0) return;
+
+                currentMode = mode;
+                document.querySelectorAll('.mode-btn').forEach(function(b) {
+                    b.classList.remove('active');
+                });
+                this.classList.add('active');
+
+                // Recalculate scatter positions for every dot
+                var total  = dots.length;
+                var formFn = formations[mode];
+                for (var i = 0; i < total; i++) {
+                    var s = formFn(i, total);
+                    dots[i].scatterX = s.x;
+                    dots[i].scatterY = s.y;
+                }
+
+                // If in scatter state, animate to new formation
+                if (!imageVisible) {
+                    for (var i = 0; i < dots.length; i++) {
+                        tweenToScatter(dots[i], Math.random() * 0.55);
+                    }
+                }
+            });
+        });
+
+        // ── File upload ──────────────────────────────────────────────────
+        document.getElementById('file-input').addEventListener('change', function(e) {
+            var file = e.target.files[0];
+            if (!file) return;
+            var reader = new FileReader();
+            reader.onload = function(ev) {
+                var img = new Image();
+                img.onload = function() { applyImage(img); };
+                img.src = ev.target.result;
+            };
+            reader.readAsDataURL(file);
+            this.value = '';
+        });
+
+        // ── Load default image ───────────────────────────────────────────
+        var defaultImg = new Image();
+        defaultImg.crossOrigin = 'Anonymous';
+        defaultImg.src = 'images/jsyeh600x600.png';
+        defaultImg.onload = function() { applyImage(defaultImg); };
+    </script>
+</body>
+</html>
